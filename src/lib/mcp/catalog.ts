@@ -36,6 +36,7 @@ const PURPOSE: Record<string, string> = {
   "StatusWidget.tsx": "A device card with a picture and live details (car charging, printer, washer).",
   "TextWidget.tsx": "Free text: a heading or caption that labels the widgets around it.",
   "PowerSankeyWidget.tsx": "Live Home Assistant power flow Sankey diagram with grid, solar, battery and consumer bands.",
+  "SchoolRotationWidget.tsx": "Rotating school day schedule per child, with holiday support, weekly reminders and lookahead.",
 };
 
 const GRID_CONTRACT = {

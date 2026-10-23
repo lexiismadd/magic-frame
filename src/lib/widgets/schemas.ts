@@ -12,6 +12,7 @@ export const WIDGET_TYPES = [
   "ShoppingListWidget.tsx",
   "TodosWidget.tsx",
   "PowerSankeyWidget.tsx",
+  "SchoolRotationWidget.tsx",
 ] as const;
 
 const baseConfig = z
@@ -475,6 +476,18 @@ const todosConfig = baseConfig
   })
   .passthrough();
 
+const schoolRotationConfig = baseConfig.extend({
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+  cycleDays: z.number().optional(),
+  schedules: z.string().optional(),
+  noSchoolDates: z.string().optional(),
+  reminders: z.string().optional(),
+  showUpcoming: z.boolean().optional(),
+  upcomingCount: z.number().optional(),
+  accentColor: z.string().optional(),
+});
+
 // Custom-Modul-Widget: type beginnt mit "custom:". Config ist beliebig
 // (passthrough), weil jedes Modul sein eigenes Field-Schema im Manifest hat.
 // Validierung der Felder passiert client-seitig im Inspector.
@@ -628,6 +641,9 @@ export const widgetLayoutItemSchema = z.union([
   z
     .object({ type: z.literal("PowerSankeyWidget.tsx"), config: powerSankeyConfig })
     .merge(commonWidgetFields()),
+  z
+    .object({ type: z.literal("SchoolRotationWidget.tsx"), config: schoolRotationConfig })
+    .merge(commonWidgetFields()),
   ]),
 ]);
 
@@ -678,6 +694,7 @@ export const WIDGET_CONFIG_SCHEMAS: Record<string, z.ZodTypeAny> = {
   "StatusWidget.tsx": statusConfig,
   "TextWidget.tsx": textConfig,
   "PowerSankeyWidget.tsx": powerSankeyConfig,
+  "SchoolRotationWidget.tsx": schoolRotationConfig,
 };
 
 export const layoutSchema = z.array(widgetLayoutItemSchema);
