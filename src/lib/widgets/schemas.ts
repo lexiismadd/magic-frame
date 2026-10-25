@@ -11,6 +11,7 @@ export const WIDGET_TYPES = [
   "MessagesWidget.tsx",
   "ShoppingListWidget.tsx",
   "TodosWidget.tsx",
+  "PowerSankeyWidget.tsx",
 ] as const;
 
 const baseConfig = z
@@ -379,6 +380,41 @@ const textConfig = baseConfig
   })
   .passthrough();
 
+const powerSankeyConfig = baseConfig
+  .extend({
+    title: z.string().optional(),
+    gridSensor: z.string().optional(),
+    solarSensor: z.string().optional(),
+    batteryPowerSensor: z.string().optional(),
+    batteryLevelSensor: z.string().optional(),
+    invertGrid: z.boolean().optional(),
+    invertBattery: z.boolean().optional(),
+    flows: z.array(z.object({
+      entityId: z.string(),
+      label: z.string().optional(),
+      color: z.string().optional(),
+      type: z.enum(["grid", "solar", "battery", "consumer"]),
+    })).optional(),
+    homeLabel: z.string().optional(),
+    otherLabel: z.string().optional(),
+    showOther: z.boolean().optional(),
+    minFlowW: z.number().optional(),
+    sourceLabelFirst: z.boolean().optional(),
+    consumerLabelFirst: z.boolean().optional(),
+    showSourceIcons: z.boolean().optional(),
+    iconOnlySources: z.boolean().optional(),
+    showConsumerIcons: z.boolean().optional(),
+    iconOnlyConsumers: z.boolean().optional(),
+    batteryIconScale: z.number().optional(),
+    importColor: z.string().optional(),
+    exportColor: z.string().optional(),
+    solarColor: z.string().optional(),
+    batteryOutColor: z.string().optional(),
+    batteryInColor: z.string().optional(),
+    consumerColor: z.string().optional(),
+  })
+  .passthrough();
+
 const mediaPlayerConfig = baseConfig
   .extend({
     // auto wählt nach Kachelform (breit → row, hoch → stack, quadratisch → cover)
@@ -589,6 +625,9 @@ export const widgetLayoutItemSchema = z.union([
   z
     .object({ type: z.literal("TextWidget.tsx"), config: textConfig })
     .merge(commonWidgetFields()),
+  z
+    .object({ type: z.literal("PowerSankeyWidget.tsx"), config: powerSankeyConfig })
+    .merge(commonWidgetFields()),
   ]),
 ]);
 
@@ -638,6 +677,7 @@ export const WIDGET_CONFIG_SCHEMAS: Record<string, z.ZodTypeAny> = {
   "QrWidget.tsx": qrConfig,
   "StatusWidget.tsx": statusConfig,
   "TextWidget.tsx": textConfig,
+  "PowerSankeyWidget.tsx": powerSankeyConfig,
 };
 
 export const layoutSchema = z.array(widgetLayoutItemSchema);
