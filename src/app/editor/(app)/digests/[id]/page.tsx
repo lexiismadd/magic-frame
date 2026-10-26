@@ -33,6 +33,8 @@ import {
   GraduationCap,
   Copy,
   Layers,
+  ExternalLink,
+  Check,
 } from "lucide-react";
 import Link from "next/link";
 import { useT } from "@/lib/i18n/LocaleProvider";
@@ -466,6 +468,8 @@ export default function DigestEditorPage({
           </div>
         </header>
 
+        <DigestEndpointBar slug={slug} />
+
         {error && (
           <div className="mb-6 text-sm text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg p-3">
             {error}
@@ -639,6 +643,60 @@ export default function DigestEditorPage({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function DigestEndpointBar({ slug }: { slug: string }) {
+  const t = useT();
+  const [token, setToken] = useState<string | null>(null);
+  const [origin, setOrigin] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    setOrigin(window.location.origin);
+    fetch("/api/auth/shortcut-token", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => setToken(d.token ?? null))
+      .catch(() => {});
+  }, []);
+
+  const fullUrl = token
+    ? `${origin}/api/digest/${slug}?key=${token}`
+    : `${origin}/api/digest/${slug}`;
+
+  function copy() {
+    navigator.clipboard?.writeText(fullUrl).then(
+      () => { setCopied(true); setTimeout(() => setCopied(false), 1500); },
+      () => {},
+    );
+  }
+
+  return (
+    <div className="mb-6 bg-[var(--mf-surface-2)]/60 border border-[var(--mf-bdr)]/10 rounded-xl px-4 py-3 flex items-center gap-3">
+      <div className="flex-1 min-w-0">
+        <div className="text-[10px] uppercase tracking-widest text-[var(--mf-fg)]/40 mb-1">
+          {t("Endpoint")}
+        </div>
+        <code className="text-xs font-mono text-[var(--mf-fg)]/70 break-all block">
+          {token ? fullUrl : `${origin}/api/digest/${slug}?key=...`}
+        </code>
+      </div>
+      <a
+        href={fullUrl}
+        target="_blank"
+        rel="noreferrer"
+        className="text-xs text-[var(--mf-fg)]/50 hover:text-[var(--mf-fg)] bg-[var(--mf-elev)]/5 hover:bg-[var(--mf-elev)]/10 rounded-md px-2.5 h-7 flex items-center gap-1 shrink-0"
+      >
+        <ExternalLink size={11} /> {t("Öffnen")}
+      </a>
+      <button
+        onClick={copy}
+        className="text-xs text-[var(--mf-fg)]/50 hover:text-[var(--mf-fg)] bg-[var(--mf-elev)]/5 hover:bg-[var(--mf-elev)]/10 rounded-md px-2.5 h-7 flex items-center gap-1 shrink-0"
+      >
+        {copied ? <Check size={11} /> : <Copy size={11} />}
+        {copied ? t("Kopiert") : t("Kopieren")}
+      </button>
     </div>
   );
 }
