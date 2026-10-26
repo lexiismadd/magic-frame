@@ -383,7 +383,7 @@ export default function DigestEditorPage({
     await save();
 
     try {
-      const res = await fetch(`/api/digest/${digest.slug}?format=json&t=${Date.now()}`);
+      const res = await fetch(`/api/digest/${slug}?format=json&t=${Date.now()}`);
       if (!res.ok) {
         setPreview(`(${t("Fehler")}: ${res.status})`);
         return;

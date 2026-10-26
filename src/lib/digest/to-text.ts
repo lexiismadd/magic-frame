@@ -166,14 +166,18 @@ async function calendarToText(config: any, opts: any, today: Date): Promise<stri
   }
 
   try {
-    const url = new URL("/api/calendar", process.env.APP_BASE_URL || "http://localhost:3000");
+    const base = process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
+    const url = new URL("/api/calendar", base);
     url.searchParams.set("feeds", typeof feeds === "string" ? feeds : JSON.stringify(feeds));
     url.searchParams.set("mode", "range");
     url.searchParams.set("start", startDate);
     url.searchParams.set("days", String(days));
     url.searchParams.set("limit", "50");
 
-    const res = await fetch(url.toString(), { cache: "no-store" });
+    const res = await fetch(url.toString(), {
+      cache: "no-store",
+      signal: AbortSignal.timeout(10_000),
+    });
     if (!res.ok) return ["(calendar unavailable)"];
     const data = await res.json();
     const events: any[] = data.events || [];
