@@ -24,7 +24,6 @@ export async function GET() {
   const digests = await prisma.digest.findMany({
     include: {
       entries: { orderBy: { order: "asc" } },
-      dashboard: { select: { id: true, name: true } },
     },
     orderBy: { createdAt: "asc" },
   });
@@ -40,10 +39,10 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { slug, name, dashboardId, entries } = body;
+  const { slug, name, entries } = body;
 
-  if (!slug || !name || !dashboardId) {
-    return NextResponse.json({ error: "slug, name, and dashboardId are required" }, { status: 400 });
+  if (!slug || !name) {
+    return NextResponse.json({ error: "slug and name are required" }, { status: 400 });
   }
 
   const safeSlug = slug
@@ -56,20 +55,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid slug" }, { status: 400 });
   }
 
-  const dashboard = await prisma.dashboard.findUnique({ where: { id: dashboardId } });
-  if (!dashboard) {
-    return NextResponse.json({ error: "View not found" }, { status: 404 });
-  }
-
   try {
     const digest = await prisma.digest.create({
       data: {
         slug: safeSlug,
         name,
-        dashboardId,
         entries: entries?.length
           ? {
               create: entries.map((e: any, i: number) => ({
+                dashboardId: e.dashboardId,
                 widgetId: e.widgetId,
                 order: e.order ?? i,
                 textOptions: e.textOptions ?? {},

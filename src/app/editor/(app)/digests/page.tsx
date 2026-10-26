@@ -6,14 +6,11 @@ import { useRouter } from "next/navigation";
 import { Plus, Trash2, ArrowRight, MessageSquareText, Copy } from "lucide-react";
 import { useT } from "@/lib/i18n/LocaleProvider";
 
-type Dashboard = { id: string; name: string };
 type DigestSummary = {
   id: string;
   slug: string;
   name: string;
-  dashboardId: string;
-  dashboard: { id: string; name: string };
-  entries: { widgetId: string }[];
+  entries: { widgetId: string; dashboardId: string }[];
 };
 
 function DigestAddress({ slug }: { slug: string }) {
@@ -54,11 +51,9 @@ export default function DigestsListPage() {
   const t = useT();
   const router = useRouter();
   const [digests, setDigests] = useState<DigestSummary[] | null>(null);
-  const [dashboards, setDashboards] = useState<Dashboard[]>([]);
   const [modal, setModal] = useState(false);
   const [formName, setFormName] = useState("");
   const [formSlug, setFormSlug] = useState("");
-  const [formDashboardId, setFormDashboardId] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -69,19 +64,12 @@ export default function DigestsListPage() {
       .catch(() => setDigests([]));
   }
 
-  useEffect(() => {
-    load();
-    fetch("/api/dashboards", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((d) => setDashboards(Array.isArray(d) ? d : []))
-      .catch(() => {});
-  }, []);
+  useEffect(() => { load(); }, []);
 
   function openNewModal() {
     setError(null);
     setFormName("");
     setFormSlug("");
-    setFormDashboardId(dashboards[0]?.id || "");
     setModal(true);
   }
 
@@ -93,11 +81,7 @@ export default function DigestsListPage() {
       const res = await fetch("/api/admin/digests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          slug: formSlug,
-          name: formName,
-          dashboardId: formDashboardId,
-        }),
+        body: JSON.stringify({ slug: formSlug, name: formName }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -121,6 +105,11 @@ export default function DigestsListPage() {
     load();
   }
 
+  function viewNames(entries: DigestSummary["entries"]): string {
+    const ids = [...new Set(entries.map((e) => e.dashboardId))];
+    return ids.length > 0 ? ids.join(", ") : "—";
+  }
+
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="max-w-[1100px] mx-auto px-8 py-10">
@@ -138,8 +127,7 @@ export default function DigestsListPage() {
           </div>
           <button
             onClick={openNewModal}
-            disabled={dashboards.length === 0}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-full text-sm font-medium shadow-sm shadow-blue-500/30 disabled:opacity-50"
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-full text-sm font-medium shadow-sm shadow-blue-500/30"
           >
             <Plus size={14} /> {t("Neuer Digest")}
           </button>
@@ -153,8 +141,7 @@ export default function DigestsListPage() {
             <p className="text-[var(--mf-fg)]/60 mb-4">{t("Noch keine Digests angelegt.")}</p>
             <button
               onClick={openNewModal}
-              disabled={dashboards.length === 0}
-              className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-full text-sm font-medium disabled:opacity-50"
+              className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-full text-sm font-medium"
             >
               <Plus size={14} /> {t("Ersten Digest anlegen")}
             </button>
@@ -177,7 +164,7 @@ export default function DigestsListPage() {
                   </div>
                 </Link>
                 <div className="text-xs text-[var(--mf-fg)]/50 mb-1">
-                  {t("View")}: {d.dashboard?.name || d.dashboardId}
+                  {t("Views")}: {viewNames(d.entries)}
                 </div>
                 <div className="text-xs text-[var(--mf-fg)]/40 mb-2">
                   {d.entries.length} {d.entries.length === 1 ? "Widget" : "Widgets"}
@@ -215,7 +202,7 @@ export default function DigestsListPage() {
           >
             <h2 className="text-lg font-semibold mb-1">{t("Neuer Digest")}</h2>
             <p className="text-sm text-[var(--mf-fg)]/50 mb-6">
-              {t("Wähle einen View als Quelle. Du kannst danach auswählen, welche Widgets im Digest erscheinen.")}
+              {t("Widgets werden danach im Editor aus beliebigen Views hinzugefügt.")}
             </p>
 
             <label className="block mb-4">
@@ -237,7 +224,7 @@ export default function DigestsListPage() {
               />
             </label>
 
-            <label className="block mb-4">
+            <label className="block mb-6">
               <span className="text-xs font-medium text-[var(--mf-fg)]/70 block mb-2">
                 Slug
               </span>
@@ -254,22 +241,6 @@ export default function DigestsListPage() {
                   className="w-full bg-[var(--mf-surface)] border border-[var(--mf-bdr)]/10 text-[var(--mf-fg)] font-mono rounded-lg p-3 outline-none focus:border-blue-500"
                 />
               </div>
-            </label>
-
-            <label className="block mb-6">
-              <span className="text-xs font-medium text-[var(--mf-fg)]/70 block mb-2">
-                {t("Quell-View")}
-              </span>
-              <select
-                required
-                value={formDashboardId}
-                onChange={(e) => setFormDashboardId(e.target.value)}
-                className="w-full bg-[var(--mf-surface)] border border-[var(--mf-bdr)]/10 text-[var(--mf-fg)] rounded-lg p-3 outline-none focus:border-blue-500"
-              >
-                {dashboards.map((db) => (
-                  <option key={db.id} value={db.id}>{db.name}</option>
-                ))}
-              </select>
             </label>
 
             {error && (

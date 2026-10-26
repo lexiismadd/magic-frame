@@ -48,8 +48,9 @@ export async function renderDigest(
   });
   if (!digest) return null;
 
+  const dashboardIds = [...new Set(digest.entries.map((e) => e.dashboardId))];
   const widgets = await prisma.widget.findMany({
-    where: { dashboardId: digest.dashboardId },
+    where: { dashboardId: { in: dashboardIds } },
   });
   const widgetMap = new Map<string, WidgetWithConfig>();
   for (const w of widgets) widgetMap.set(w.id, w as any);

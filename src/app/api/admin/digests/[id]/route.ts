@@ -28,13 +28,6 @@ export async function GET(
     where: { id },
     include: {
       entries: { orderBy: { order: "asc" } },
-      dashboard: {
-        select: {
-          id: true,
-          name: true,
-          widgets: { select: { id: true, type: true, label: true, config: true } },
-        },
-      },
     },
   });
 
@@ -83,6 +76,7 @@ export async function PUT(
           ? {
               entries: {
                 create: entries.map((e: any, i: number) => ({
+                  dashboardId: e.dashboardId,
                   widgetId: e.widgetId,
                   order: e.order ?? i,
                   textOptions: e.textOptions ?? {},
@@ -98,7 +92,6 @@ export async function PUT(
     where: { id },
     include: {
       entries: { orderBy: { order: "asc" } },
-      dashboard: { select: { id: true, name: true } },
     },
   });
 

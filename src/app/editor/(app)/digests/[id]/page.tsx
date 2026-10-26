@@ -32,6 +32,7 @@ import {
   Type as TypeIcon,
   GraduationCap,
   Copy,
+  Layers,
 } from "lucide-react";
 import Link from "next/link";
 import { useT } from "@/lib/i18n/LocaleProvider";
@@ -67,7 +68,9 @@ const SUPPORTED_TYPES = new Set([
 ]);
 
 type ViewWidget = { id: string; type: string; label: string; config: any };
+type DashboardWithWidgets = { id: string; name: string; widgets: ViewWidget[] };
 type DigestEntryDraft = {
+  dashboardId: string;
   widgetId: string;
   order: number;
   textOptions: Record<string, any>;
@@ -76,8 +79,6 @@ type DigestData = {
   id: string;
   slug: string;
   name: string;
-  dashboardId: string;
-  dashboard: { id: string; name: string; widgets: ViewWidget[] };
   entries: DigestEntryDraft[];
 };
 
@@ -204,6 +205,7 @@ export default function DigestEditorPage({
   const router = useRouter();
   const [digestId, setDigestId] = useState<string | null>(null);
   const [digest, setDigest] = useState<DigestData | null>(null);
+  const [dashboards, setDashboards] = useState<DashboardWithWidgets[]>([]);
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [entries, setEntries] = useState<DigestEntryDraft[]>([]);
@@ -221,7 +223,7 @@ export default function DigestEditorPage({
     params.then((p) => setDigestId(p.id));
   }, [params]);
 
-  const load = useCallback(async () => {
+  const loadDigest = useCallback(async () => {
     if (!digestId) return;
     const res = await fetch(`/api/admin/digests/${digestId}?t=${Date.now()}`, {
       cache: "no-store",
@@ -232,6 +234,7 @@ export default function DigestEditorPage({
     setName(data.name);
     setSlug(data.slug);
     setEntries(data.entries.map((e) => ({
+      dashboardId: e.dashboardId,
       widgetId: e.widgetId,
       order: e.order,
       textOptions: (e as any).textOptions ?? {},
@@ -239,46 +242,74 @@ export default function DigestEditorPage({
     setDirty(false);
   }, [digestId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { loadDigest(); }, [loadDigest]);
 
-  const viewWidgets = digest?.dashboard?.widgets ?? [];
-  const widgetMap = new Map(viewWidgets.map((w) => [w.id, w]));
-  const entryWidgetIds = new Set(entries.map((e) => e.widgetId));
-  const availableWidgets = viewWidgets.filter(
-    (w) => !entryWidgetIds.has(w.id) && SUPPORTED_TYPES.has(w.type),
-  );
-  const unsupportedWidgets = viewWidgets.filter(
-    (w) => !entryWidgetIds.has(w.id) && !SUPPORTED_TYPES.has(w.type),
-  );
+  useEffect(() => {
+    fetch("/api/dashboards", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((data) => {
+        if (!Array.isArray(data)) return;
+        const ids = data.map((d: any) => d.id);
+        Promise.all(
+          ids.map((id: string) =>
+            fetch(`/api/admin/views/${id}/widgets?t=${Date.now()}`, { cache: "no-store" })
+              .then((r) => r.ok ? r.json() : [])
+              .catch(() => [])
+          ),
+        ).then((widgetSets) => {
+          setDashboards(
+            data.map((d: any, i: number) => ({
+              id: d.id,
+              name: d.name,
+              widgets: widgetSets[i] || [],
+            })),
+          );
+        });
+      })
+      .catch(() => {});
+  }, []);
 
-  function addWidget(widgetId: string) {
+  const allWidgets = new Map<string, ViewWidget & { dashboardId: string; dashboardName: string }>();
+  for (const db of dashboards) {
+    for (const w of db.widgets) {
+      allWidgets.set(`${db.id}:${w.id}`, { ...w, dashboardId: db.id, dashboardName: db.name });
+    }
+  }
+
+  const entryKeys = new Set(entries.map((e) => `${e.dashboardId}:${e.widgetId}`));
+
+  function addWidget(dashboardId: string, widgetId: string) {
     setEntries((prev) => [
       ...prev,
-      { widgetId, order: prev.length, textOptions: {} },
+      { dashboardId, widgetId, order: prev.length, textOptions: {} },
     ]);
-    setExpanded((prev) => new Set(prev).add(widgetId));
+    setExpanded((prev) => new Set(prev).add(`${dashboardId}:${widgetId}`));
     setDirty(true);
   }
 
-  function removeWidget(widgetId: string) {
-    setEntries((prev) => prev.filter((e) => e.widgetId !== widgetId));
+  function removeWidget(dashboardId: string, widgetId: string) {
+    setEntries((prev) =>
+      prev.filter((e) => !(e.dashboardId === dashboardId && e.widgetId === widgetId)),
+    );
     setDirty(true);
   }
 
-  function updateTextOptions(widgetId: string, opts: Record<string, any>) {
+  function updateTextOptions(dashboardId: string, widgetId: string, opts: Record<string, any>) {
     setEntries((prev) =>
       prev.map((e) =>
-        e.widgetId === widgetId ? { ...e, textOptions: opts } : e,
+        e.dashboardId === dashboardId && e.widgetId === widgetId
+          ? { ...e, textOptions: opts }
+          : e,
       ),
     );
     setDirty(true);
   }
 
-  function toggleExpand(widgetId: string) {
+  function toggleExpand(key: string) {
     setExpanded((prev) => {
       const next = new Set(prev);
-      if (next.has(widgetId)) next.delete(widgetId);
-      else next.add(widgetId);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   }
@@ -320,6 +351,7 @@ export default function DigestEditorPage({
           name,
           slug,
           entries: entries.map((e, i) => ({
+            dashboardId: e.dashboardId,
             widgetId: e.widgetId,
             order: i,
             textOptions: e.textOptions,
@@ -412,9 +444,6 @@ export default function DigestEditorPage({
                   />
                 </label>
               </div>
-              <div className="text-xs text-[var(--mf-fg)]/40 mt-2">
-                {t("View")}: <span className="text-[var(--mf-fg)]/60">{digest.dashboard.name}</span>
-              </div>
             </div>
 
             <div className="flex items-center gap-2 shrink-0 pb-1">
@@ -458,15 +487,17 @@ export default function DigestEditorPage({
             ) : (
               <div className="space-y-2">
                 {entries.map((entry, index) => {
-                  const widget = widgetMap.get(entry.widgetId);
-                  if (!widget) return null;
-                  const meta = WIDGET_META[widget.type];
-                  const isExpanded = expanded.has(entry.widgetId);
-                  const displayName = widget.label || meta?.label || widget.type.replace(".tsx", "");
+                  const key = `${entry.dashboardId}:${entry.widgetId}`;
+                  const widgetInfo = allWidgets.get(key);
+                  const widgetType = widgetInfo?.type || "";
+                  const meta = WIDGET_META[widgetType];
+                  const isExpanded = expanded.has(key);
+                  const displayName = widgetInfo?.label || meta?.label || widgetType.replace(".tsx", "");
+                  const viewName = widgetInfo?.dashboardName || entry.dashboardId;
 
                   return (
                     <div
-                      key={entry.widgetId}
+                      key={key}
                       draggable
                       onDragStart={() => handleDragStart(index)}
                       onDragEnter={() => handleDragEnter(index)}
@@ -479,12 +510,17 @@ export default function DigestEditorPage({
                           size={14}
                           className="text-[var(--mf-fg)]/30 cursor-grab shrink-0"
                         />
-                        <WidgetIcon type={widget.type} />
-                        <span className="font-medium text-sm flex-1 truncate">
-                          {displayName}
-                        </span>
+                        <WidgetIcon type={widgetType} />
+                        <div className="flex-1 min-w-0">
+                          <span className="font-medium text-sm truncate block">
+                            {displayName}
+                          </span>
+                          <span className="text-[10px] text-[var(--mf-fg)]/40 flex items-center gap-1">
+                            <Layers size={9} /> {viewName}
+                          </span>
+                        </div>
                         <button
-                          onClick={() => toggleExpand(entry.widgetId)}
+                          onClick={() => toggleExpand(key)}
                           className="text-[var(--mf-fg)]/40 hover:text-[var(--mf-fg)]/80 p-1"
                         >
                           {isExpanded ? (
@@ -494,7 +530,7 @@ export default function DigestEditorPage({
                           )}
                         </button>
                         <button
-                          onClick={() => removeWidget(entry.widgetId)}
+                          onClick={() => removeWidget(entry.dashboardId, entry.widgetId)}
                           className="text-red-400/60 hover:text-red-300 p-1"
                         >
                           <Trash2 size={14} />
@@ -504,10 +540,10 @@ export default function DigestEditorPage({
                       {isExpanded && (
                         <div className="px-3 pb-3 border-t border-[var(--mf-bdr)]/5 pt-3">
                           <TextOptionsEditor
-                            widgetType={widget.type}
+                            widgetType={widgetType}
                             options={entry.textOptions}
                             onChange={(opts) =>
-                              updateTextOptions(entry.widgetId, opts)
+                              updateTextOptions(entry.dashboardId, entry.widgetId, opts)
                             }
                           />
                         </div>
@@ -534,61 +570,70 @@ export default function DigestEditorPage({
             )}
           </div>
 
-          {/* Sidebar: Available widgets */}
+          {/* Sidebar: Available widgets grouped by view */}
           <div>
             <div className="text-xs font-medium uppercase tracking-[0.15em] text-[var(--mf-fg)]/40 mb-3">
               {t("Verfügbare Widgets")}
             </div>
 
-            {availableWidgets.length === 0 && unsupportedWidgets.length === 0 ? (
+            {dashboards.length === 0 ? (
               <div className="text-xs text-[var(--mf-fg)]/30 p-4">
-                {entries.length > 0
-                  ? t("Alle unterstützten Widgets sind bereits im Digest.")
-                  : t("Keine Widgets in diesem View.")}
+                {t("Wird geladen…")}
               </div>
             ) : (
-              <div className="space-y-1">
-                {availableWidgets.map((w) => {
-                  const meta = WIDGET_META[w.type];
-                  const displayName = w.label || meta?.label || w.type.replace(".tsx", "");
+              <div className="space-y-4">
+                {dashboards.map((db) => {
+                  const supported = db.widgets.filter(
+                    (w) => SUPPORTED_TYPES.has(w.type) && !entryKeys.has(`${db.id}:${w.id}`),
+                  );
+                  const unsupported = db.widgets.filter(
+                    (w) => !SUPPORTED_TYPES.has(w.type) && !entryKeys.has(`${db.id}:${w.id}`),
+                  );
+                  if (supported.length === 0 && unsupported.length === 0) return null;
+
                   return (
-                    <button
-                      key={w.id}
-                      onClick={() => addWidget(w.id)}
-                      className="w-full flex items-center gap-2 p-2.5 rounded-lg text-sm hover:bg-[var(--mf-elev)]/5 border border-transparent hover:border-[var(--mf-bdr)]/10 transition-colors text-left"
-                    >
-                      <WidgetIcon type={w.type} size={14} />
-                      <span className="flex-1 truncate text-[var(--mf-fg)]/80">
-                        {displayName}
-                      </span>
-                      <Plus
-                        size={14}
-                        className="text-[var(--mf-fg)]/30 shrink-0"
-                      />
-                    </button>
+                    <div key={db.id}>
+                      <div className="text-[10px] uppercase tracking-widest text-[var(--mf-fg)]/40 px-1 pb-1.5 flex items-center gap-1.5">
+                        <Layers size={10} /> {db.name}
+                      </div>
+                      <div className="space-y-0.5">
+                        {supported.map((w) => {
+                          const meta = WIDGET_META[w.type];
+                          const displayName = w.label || meta?.label || w.type.replace(".tsx", "");
+                          return (
+                            <button
+                              key={w.id}
+                              onClick={() => addWidget(db.id, w.id)}
+                              className="w-full flex items-center gap-2 p-2 rounded-lg text-sm hover:bg-[var(--mf-elev)]/5 border border-transparent hover:border-[var(--mf-bdr)]/10 transition-colors text-left"
+                            >
+                              <WidgetIcon type={w.type} size={13} />
+                              <span className="flex-1 truncate text-[var(--mf-fg)]/80 text-xs">
+                                {displayName}
+                              </span>
+                              <Plus
+                                size={13}
+                                className="text-[var(--mf-fg)]/30 shrink-0"
+                              />
+                            </button>
+                          );
+                        })}
+                        {unsupported.map((w) => {
+                          const meta = WIDGET_META[w.type];
+                          const displayName = w.label || meta?.label || w.type.replace(".tsx", "");
+                          return (
+                            <div
+                              key={w.id}
+                              className="flex items-center gap-2 p-2 rounded-lg text-xs opacity-25 cursor-not-allowed"
+                            >
+                              <WidgetIcon type={w.type} size={13} />
+                              <span className="flex-1 truncate">{displayName}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
                   );
                 })}
-
-                {unsupportedWidgets.length > 0 && (
-                  <>
-                    <div className="text-[10px] uppercase tracking-widest text-[var(--mf-fg)]/25 pt-3 pb-1 px-1">
-                      {t("Nicht unterstützt")}
-                    </div>
-                    {unsupportedWidgets.map((w) => {
-                      const meta = WIDGET_META[w.type];
-                      const displayName = w.label || meta?.label || w.type.replace(".tsx", "");
-                      return (
-                        <div
-                          key={w.id}
-                          className="flex items-center gap-2 p-2.5 rounded-lg text-sm opacity-30 cursor-not-allowed"
-                        >
-                          <WidgetIcon type={w.type} size={14} />
-                          <span className="flex-1 truncate">{displayName}</span>
-                        </div>
-                      );
-                    })}
-                  </>
-                )}
               </div>
             )}
           </div>
