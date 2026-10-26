@@ -482,11 +482,12 @@ const schoolRotationConfig = baseConfig.extend({
   cycleDays: z.number().optional(),
   schedules: z.string().optional(),
   noSchoolDates: z.string().optional(),
+  noSchoolCalendar: z.string().optional(),
   reminders: z.string().optional(),
   showUpcoming: z.boolean().optional(),
   upcomingCount: z.number().optional(),
   accentColor: z.string().optional(),
-});
+}).passthrough();
 
 // Custom-Modul-Widget: type beginnt mit "custom:". Config ist beliebig
 // (passthrough), weil jedes Modul sein eigenes Field-Schema im Manifest hat.

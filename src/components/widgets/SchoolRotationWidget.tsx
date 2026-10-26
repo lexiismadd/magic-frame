@@ -1,18 +1,21 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-
-type ChildSchedule = {
-  name: string;
-  days: Record<string, string[]>;
-};
-
-type Reminder = {
-  day: string;
-  text: string;
-  icon?: string;
-  kid?: string;
-};
+import { format } from "date-fns";
+import { useLocale } from "@/lib/i18n/LocaleProvider";
+import { dateFnsLocale } from "@/lib/i18n/date-locale";
+import { shortDatePattern } from "@/lib/i18n/locales";
+import {
+  parseSchedules,
+  parseReminders,
+  remindersFor,
+  parseExclusions,
+  calendarExclusions,
+  parseIsoDate,
+  isoDate,
+  clampInt,
+  type ChildSchedule,
+} from "@/lib/widgets/school-rotation";
 
 type SchoolRotationConfig = {
   startDate?: string;
@@ -20,48 +23,27 @@ type SchoolRotationConfig = {
   cycleDays?: number;
   schedules?: string;
   noSchoolDates?: string;
+  noSchoolCalendar?: string;
   reminders?: string;
   showUpcoming?: boolean;
   upcomingCount?: number;
   accentColor?: string;
 };
 
-function fmtDate(d: Date) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function parseDate(s: string) {
-  const [y, m, d] = s.split("-").map(Number);
-  return new Date(y, m - 1, d);
-}
-
 function isWeekday(d: Date) {
   const dow = d.getDay();
   return dow !== 0 && dow !== 6;
 }
 
-function parseExclusions(text: string | undefined) {
-  const map = new Map<string, string>();
-  if (!text) return map;
-  for (const line of text.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const match = trimmed.match(/^(\d{4}-\d{2}-\d{2})\s*(.*)/);
-    if (match) map.set(match[1], match[2].replace(/^[:\-–—]\s*/, "").trim());
-  }
-  return map;
-}
-
 function isSchoolDay(d: Date, excl: Map<string, string>) {
-  return isWeekday(d) && !excl.has(fmtDate(d));
+  return isWeekday(d) && !excl.has(isoDate(d));
 }
 
+// Die Zählung ist die des Beispiel-Moduls und bleibt es (#102): Tag für Tag
+// durchs Schuljahr, jeder Werktag, der nicht ausfällt, zählt; Rotationstag =
+// ((Zähler - 1) mod Zyklus) + 1.
 function walkForward(
   after: Date,
-  start: Date,
   end: Date,
   excl: Map<string, string>,
   cycle: number,
@@ -74,10 +56,7 @@ function walkForward(
   while (result.length < count && cur <= end) {
     if (isSchoolDay(cur, excl)) {
       schoolDaysSoFar++;
-      result.push({
-        date: new Date(cur),
-        rotDay: ((schoolDaysSoFar - 1) % cycle) + 1,
-      });
+      result.push({ date: new Date(cur), rotDay: ((schoolDaysSoFar - 1) % cycle) + 1 });
     }
     cur.setDate(cur.getDate() + 1);
   }
@@ -99,13 +78,10 @@ function getScheduleInfo(
   cycle: number,
   lookahead: number,
 ): ScheduleInfo {
-  const todayStr = fmtDate(today);
+  const todayStr = isoDate(today);
 
   if (today < start) {
-    const upcoming = walkForward(
-      new Date(start.getTime() - 86400000),
-      start, end, excl, cycle, lookahead, 0,
-    );
+    const upcoming = walkForward(new Date(start.getTime() - 86400000), end, excl, cycle, lookahead, 0);
     return { status: "before-start", todayRotation: null, reason: "", upcoming };
   }
   if (today > end) {
@@ -118,54 +94,41 @@ function getScheduleInfo(
 
   while (current <= today) {
     if (isSchoolDay(current, excl)) schoolDays++;
-    if (fmtDate(current) === todayStr) {
-      if (isSchoolDay(current, excl)) {
-        todayRotation = ((schoolDays - 1) % cycle) + 1;
-      }
+    if (isoDate(current) === todayStr) {
+      if (isSchoolDay(current, excl)) todayRotation = ((schoolDays - 1) % cycle) + 1;
       break;
     }
     current.setDate(current.getDate() + 1);
   }
 
-  const upcoming = walkForward(today, start, end, excl, cycle, lookahead, schoolDays);
-
-  if (todayRotation !== null) {
-    return { status: "school-day", todayRotation, reason: "", upcoming };
-  }
+  const upcoming = walkForward(today, end, excl, cycle, lookahead, schoolDays);
+  if (todayRotation !== null) return { status: "school-day", todayRotation, reason: "", upcoming };
 
   const reason = excl.get(todayStr) || "";
-  const status = !isWeekday(today) ? "weekend" : "no-school";
-  return { status, todayRotation: null, reason, upcoming };
+  return { status: !isWeekday(today) ? "weekend" : "no-school", todayRotation: null, reason, upcoming };
 }
 
 const ACTIVITY_ICONS: Record<string, string> = {
-  gym: "🏃", art: "🎨", music: "🎵", library: "📚",
-  chinese: "🈸", spanish: "🇪🇸", "play space": "🎪",
-  comedy: "🎭", stem: "🔬", computer: "💻",
-  "computer lab": "💻", science: "🔬", math: "🔢",
-  reading: "📖", writing: "✏️",
+  gym: "🏃", sport: "🏃", turnen: "🏃", pe: "🏃",
+  art: "🎨", kunst: "🎨",
+  music: "🎵", musik: "🎵",
+  library: "📚", bibliothek: "📚", bücherei: "📚",
+  chinese: "🈸", chinesisch: "🈸",
+  spanish: "🇪🇸", spanisch: "🇪🇸",
+  french: "🇫🇷", französisch: "🇫🇷",
+  english: "🇬🇧", englisch: "🇬🇧",
+  "play space": "🎪", comedy: "🎭", theater: "🎭",
+  stem: "🔬", science: "🔬", sachkunde: "🔬", sachunterricht: "🔬", naturwissenschaften: "🔬",
+  computer: "💻", "computer lab": "💻", informatik: "💻",
+  math: "🔢", mathe: "🔢", mathematik: "🔢",
+  reading: "📖", lesen: "📖", deutsch: "📖",
+  writing: "✏️", schreiben: "✏️",
+  swimming: "🏊", schwimmen: "🏊",
+  werken: "🔨", religion: "🕊️", ethik: "🕊️",
 };
 
 function actIcon(activity: string) {
   return ACTIVITY_ICONS[activity.toLowerCase()] || "▸";
-}
-
-const DAY_NAMES_LOWER = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
-
-function parseReminders(text: string | undefined): Reminder[] {
-  if (!text) return [];
-  try {
-    const parsed = JSON.parse(text);
-    return Array.isArray(parsed) ? parsed.filter((r: any) => r.day && r.text) : [];
-  } catch {
-    return [];
-  }
-}
-
-function getRemindersForDay(reminders: Reminder[], date: Date, isSchool: boolean) {
-  if (!isSchool) return [];
-  const dayName = DAY_NAMES_LOWER[date.getDay()];
-  return reminders.filter((r) => r.day.toLowerCase() === dayName);
 }
 
 const KID_COLORS = [
@@ -173,94 +136,116 @@ const KID_COLORS = [
   "#a87ff7", "#4fd1c5", "#f75f5f", "#7fb8f7",
 ];
 
-const SHORT_DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-function fmtShort(d: Date) {
-  return `${SHORT_DAYS[d.getDay()]} ${MONTHS[d.getMonth()]} ${d.getDate()}`;
-}
+// Alle sechs Stunden: so kommen nachgetragene Ferien an, ohne Home Assistant
+// mit jedem Display im Minutentakt zu befragen.
+const CALENDAR_REFRESH_MS = 6 * 60 * 60 * 1000;
 
 export default function SchoolRotationWidget({ config }: { config?: SchoolRotationConfig }) {
   const c = config ?? {};
+  const { locale, t } = useLocale();
+  const fmtShort = (d: Date) =>
+    format(d, `EEE ${shortDatePattern(locale)}`, { locale: dateFnsLocale(locale) });
 
-  const [dateKey, setDateKey] = useState(() => fmtDate(new Date()));
-
+  const [dateKey, setDateKey] = useState(() => isoDate(new Date()));
   useEffect(() => {
     const interval = setInterval(() => {
-      const now = fmtDate(new Date());
+      const now = isoDate(new Date());
       if (now !== dateKey) setDateKey(now);
     }, 30000);
     return () => clearInterval(interval);
   }, [dateKey]);
 
-  const start = useMemo(() => parseDate(c.startDate || "2026-09-02"), [c.startDate]);
-  const end = useMemo(() => parseDate(c.endDate || "2027-06-25"), [c.endDate]);
-  const cycle = c.cycleDays || 6;
+  const start = useMemo(() => parseIsoDate(c.startDate), [c.startDate]);
+  const end = useMemo(() => parseIsoDate(c.endDate), [c.endDate]);
+  const yearOk = !!start && !!end && start <= end;
+  const cycle = clampInt(c.cycleDays, 1, 30, 6);
   const showUpcoming = c.showUpcoming !== false;
-  const lookahead = c.upcomingCount || 3;
-  const accent = c.accentColor || "#4f8ef7";
+  const lookahead = clampInt(c.upcomingCount, 1, 14, 3);
+  const accent = typeof c.accentColor === "string" && c.accentColor.trim() ? c.accentColor.trim() : "#4f8ef7";
+  const calendarEntity = typeof c.noSchoolCalendar === "string" ? c.noSchoolCalendar.trim() : "";
 
-  const kids = useMemo<ChildSchedule[] | null>(() => {
-    try {
-      const parsed = JSON.parse(c.schedules || "[]");
-      return Array.isArray(parsed) ? parsed : null;
-    } catch {
-      return null;
-    }
-  }, [c.schedules]);
-
+  const kids = useMemo<ChildSchedule[] | null>(() => parseSchedules(c.schedules), [c.schedules]);
   const reminders = useMemo(() => parseReminders(c.reminders), [c.reminders]);
-  const excl = useMemo(() => parseExclusions(c.noSchoolDates), [c.noSchoolDates]);
-  const today = useMemo(() => parseDate(dateKey), [dateKey]);
+
+  // Schulfreie Tage aus einem Home-Assistant-Kalender, zusätzlich zur Liste.
+  const [calExcl, setCalExcl] = useState<Map<string, string>>(() => new Map());
+  const [calError, setCalError] = useState(false);
+  useEffect(() => {
+    if (!calendarEntity || !yearOk) {
+      setCalExcl(new Map());
+      setCalError(false);
+      return;
+    }
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const url = new URL("/api/calendar", window.location.origin);
+        url.searchParams.set("feeds", JSON.stringify([{ type: "homeassistant", calendarId: calendarEntity }]));
+        url.searchParams.set("mode", "range");
+        url.searchParams.set("start", isoDate(start!));
+        url.searchParams.set("days", String(Math.round((end!.getTime() - start!.getTime()) / 86400000) + 1));
+        url.searchParams.set("limit", "500");
+        const res = await fetch(url.toString(), { cache: "no-store" });
+        const data = await res.json().catch(() => null);
+        if (cancelled) return;
+        const failed = !res.ok || !Array.isArray(data?.events) || (data?.feeds ?? []).some((f: any) => f?.error);
+        setCalError(failed);
+        if (!failed) setCalExcl(calendarExclusions(data.events));
+      } catch {
+        if (!cancelled) setCalError(true);
+      }
+    };
+    load();
+    const timer = setInterval(load, CALENDAR_REFRESH_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [calendarEntity, yearOk, start, end, dateKey]);
+
+  const excl = useMemo(() => {
+    const merged = new Map(calExcl);
+    for (const [day, reason] of parseExclusions(c.noSchoolDates)) merged.set(day, reason || merged.get(day) || "");
+    return merged;
+  }, [calExcl, c.noSchoolDates]);
+
+  const today = useMemo(() => parseIsoDate(dateKey)!, [dateKey]);
   const info = useMemo(
-    () => getScheduleInfo(today, start, end, excl, cycle, lookahead),
-    [today, start, end, excl, cycle, lookahead],
+    () => (yearOk ? getScheduleInfo(today, start!, end!, excl, cycle, lookahead) : null),
+    [yearOk, today, start, end, excl, cycle, lookahead],
+  );
+
+  const notice = (icon: string, title: string, sub?: string, error = false) => (
+    <div className={`w-full h-full flex flex-col items-center justify-center gap-[0.3em] text-center ${error ? "" : "opacity-60"}`}>
+      <div className="text-[1.5em]">{icon}</div>
+      <div className="text-[1em] font-semibold" style={error ? { color: "#ff6b6b" } : undefined}>{title}</div>
+      {sub && <div className="text-[0.8em] opacity-70">{sub}</div>}
+    </div>
   );
 
   if (kids === null) {
-    return (
-      <div className="w-full h-full flex flex-col items-center justify-center gap-[0.3em]">
-        <div className="text-[1.5em]">⚠</div>
-        <div style={{ color: "#ff6b6b" }}>Invalid schedule JSON</div>
-        <div className="text-[0.8em] opacity-60">Check the Schedules field in widget settings</div>
-      </div>
-    );
+    return notice("⚠", t("Stundenplan unlesbar"), t("In den Einstellungen unter Inhalt prüfen."), true);
   }
-
-  if (info.status === "after-end") {
-    return (
-      <div className="w-full h-full flex flex-col items-center justify-center gap-[0.3em] opacity-50">
-        <div className="text-[1.5em]">☀️</div>
-        <div className="text-[1em] font-semibold">School&apos;s Out</div>
-      </div>
-    );
+  if (!info) {
+    return notice("📅", t("Schuljahr fehlt"), t("Ersten und letzten Schultag in den Einstellungen eintragen."));
   }
-
-  if (info.status === "before-start") {
-    return (
-      <div className="w-full h-full flex flex-col items-center justify-center gap-[0.3em] opacity-50">
-        <div className="text-[1.5em]">📅</div>
-        <div className="text-[1em] font-semibold">School starts</div>
-        <div className="text-[0.85em]">{fmtShort(start)}</div>
-      </div>
-    );
-  }
+  if (info.status === "after-end") return notice("☀️", t("Schuljahr vorbei"));
+  if (info.status === "before-start") return notice("📅", t("Schule beginnt"), fmtShort(start!));
 
   const isSchool = info.status === "school-day";
+  const dayLabel = (n: number) => `${t("Tag")} ${n}`;
 
   function renderKidLine(rotDay: number, colorize: boolean) {
     return kids!.map((kid, i) => {
       const color = KID_COLORS[i % KID_COLORS.length];
-      const acts = kid.days?.[String(rotDay)] || [];
-      const label = acts.length > 0
-        ? acts.map((a) => `${actIcon(a)} ${a}`).join(", ")
-        : "—";
+      const acts = kid.days[String(rotDay)] || [];
+      const label = acts.length > 0 ? acts.map((a) => `${actIcon(a)} ${a}`).join(", ") : "—";
       const style = colorize ? { color } : { color, opacity: 0.6 };
-      return <span key={kid.name} style={style}>{kid.name}: {label}</span>;
+      return <span key={`${kid.name}-${i}`} style={style}>{kid.name}: {label}</span>;
     });
   }
 
-  const activeReminders = getRemindersForDay(reminders, today, isSchool);
+  const activeReminders = isSchool ? remindersFor(reminders, today) : [];
 
   return (
     <div className="w-full h-full flex flex-col" style={{ gap: "0.2em", padding: "0.3em" }}>
@@ -271,19 +256,18 @@ export default function SchoolRotationWidget({ config }: { config?: SchoolRotati
             className="font-bold text-[1.1em]"
             style={{ background: accent, color: "#fff", borderRadius: "0.35em", padding: "0.1em 0.5em" }}
           >
-            Day {info.todayRotation}
+            {dayLabel(info.todayRotation!)}
           </div>
         ) : (
           <div
             className="font-semibold text-[0.9em]"
             style={{ background: "rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.7)", borderRadius: "0.35em", padding: "0.1em 0.5em" }}
           >
-            No School
+            {t("Schulfrei")}
           </div>
         )}
-        {!isSchool && info.reason && (
-          <div className="text-[0.75em] opacity-50 italic">{info.reason}</div>
-        )}
+        {!isSchool && info.reason && <div className="text-[0.75em] opacity-50 italic">{info.reason}</div>}
+        {calError && <div className="text-[0.65em] opacity-60" style={{ color: "#fbbf24" }}>{t("Ferienkalender nicht erreichbar")}</div>}
       </div>
 
       {/* Today's activities */}
@@ -297,12 +281,8 @@ export default function SchoolRotationWidget({ config }: { config?: SchoolRotati
       {activeReminders.length > 0 && (
         <div className="flex flex-col" style={{ gap: "0.15em" }}>
           {activeReminders.map((r, ri) => {
-            const kidColor = r.kid && kids
-              ? (() => {
-                  const idx = kids.findIndex((k) => k.name.toLowerCase() === r.kid!.toLowerCase());
-                  return idx >= 0 ? KID_COLORS[idx % KID_COLORS.length] : "#fbbf24";
-                })()
-              : null;
+            const idx = r.kid ? kids.findIndex((k) => k.name.toLowerCase() === r.kid!.toLowerCase()) : -1;
+            const kidColor = idx >= 0 ? KID_COLORS[idx % KID_COLORS.length] : "#fbbf24";
             return (
               <div
                 key={ri}
@@ -316,7 +296,7 @@ export default function SchoolRotationWidget({ config }: { config?: SchoolRotati
                 <span style={{ fontSize: "0.95em", flexShrink: 0 }}>{r.icon || "🔔"}</span>
                 <span style={{ fontWeight: 500, color: "#fbbf24" }}>{r.text}</span>
                 {r.kid && (
-                  <span style={{ fontWeight: 600, color: kidColor || "#fbbf24", marginLeft: "auto", fontSize: "0.9em", flexShrink: 0 }}>
+                  <span style={{ fontWeight: 600, color: kidColor, marginLeft: "auto", fontSize: "0.9em", flexShrink: 0 }}>
                     {r.kid}
                   </span>
                 )}
@@ -331,8 +311,8 @@ export default function SchoolRotationWidget({ config }: { config?: SchoolRotati
         <div className="flex flex-col" style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: "0.2em", gap: "0.1em" }}>
           <div className="uppercase font-semibold" style={{ fontSize: "0.65em", letterSpacing: "0.1em", opacity: 0.35 }}>
             {isSchool
-              ? `Tomorrow · Day ${info.upcoming[0].rotDay}`
-              : `Next · Day ${info.upcoming[0].rotDay} · ${fmtShort(info.upcoming[0].date)}`}
+              ? `${t("Morgen")} · ${dayLabel(info.upcoming[0].rotDay)}`
+              : `${t("Nächster Schultag")} · ${dayLabel(info.upcoming[0].rotDay)} · ${fmtShort(info.upcoming[0].date)}`}
           </div>
           <div className="flex flex-wrap" style={{ gap: "0.3em", fontSize: "0.75em" }}>
             {renderKidLine(info.upcoming[0].rotDay, false)}
@@ -344,19 +324,22 @@ export default function SchoolRotationWidget({ config }: { config?: SchoolRotati
       {showUpcoming && info.upcoming.length > 1 && (
         <div className="flex flex-col" style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: "0.2em", gap: "0.15em" }}>
           <div className="uppercase font-semibold" style={{ fontSize: "0.65em", letterSpacing: "0.1em", opacity: 0.35 }}>
-            Upcoming
+            {t("Demnächst")}
           </div>
           {info.upcoming.slice(1).map((u) => (
-            <div key={fmtDate(u.date)} className="flex items-baseline" style={{ gap: "0.3em", fontSize: "0.75em" }}>
+            <div key={isoDate(u.date)} className="flex items-baseline" style={{ gap: "0.3em", fontSize: "0.75em" }}>
               <span className="font-semibold whitespace-nowrap" style={{ color: accent, opacity: 0.8, minWidth: "5em" }}>
-                {fmtShort(u.date)} · Day {u.rotDay}
+                {fmtShort(u.date)} · {dayLabel(u.rotDay)}
               </span>
               {kids.length > 0 && (
                 <span className="truncate" style={{ opacity: 0.5 }}>
-                  {kids.map((kid) => {
-                    const acts = kid.days?.[String(u.rotDay)] || [];
-                    return acts.length > 0 ? `${kid.name}: ${acts.join(", ")}` : "";
-                  }).filter(Boolean).join("  ·  ")}
+                  {kids
+                    .map((kid) => {
+                      const acts = kid.days[String(u.rotDay)] || [];
+                      return acts.length > 0 ? `${kid.name}: ${acts.join(", ")}` : "";
+                    })
+                    .filter(Boolean)
+                    .join("  ·  ")}
                 </span>
               )}
             </div>
