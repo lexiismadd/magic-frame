@@ -58,11 +58,14 @@ export async function createView(id: string, name: string, orientation: "portrai
   return safeId;
 }
 
-/** Dupliziert eine Ansicht samt Widgets; Button-Ziele wandern mit. */
+/** Dupliziert eine Ansicht samt Widgets und Digests; Button-Ziele und Digest-Einträge wandern mit. */
 export async function duplicateView(sourceId: string, newId: string, name: string): Promise<string> {
   const safeId = safeViewId(newId);
   if (!safeId) throw new ViewManageError("Invalid view id", "invalid");
-  const source = await prisma.dashboard.findUnique({ where: { id: sourceId }, include: { widgets: true } });
+  const source = await prisma.dashboard.findUnique({
+    where: { id: sourceId },
+    include: { widgets: true, digests: { include: { entries: true } } },
+  });
   if (!source) throw new ViewManageError(`Source view "${sourceId}" not found`, "not_found");
 
   const suffix = `_${safeId}`;
@@ -85,6 +88,22 @@ export async function duplicateView(sourceId: string, newId: string, name: strin
           },
         }),
       ),
+      ...source.digests.map((d) =>
+        prisma.digest.create({
+          data: {
+            slug: `${d.slug}-${safeId}`,
+            name: `${d.name} (copy)`,
+            dashboardId: safeId,
+            entries: {
+              create: d.entries.map((e) => ({
+                widgetId: idMap[e.widgetId] ?? e.widgetId,
+                order: e.order,
+                textOptions: e.textOptions as any,
+              })),
+            },
+          },
+        }),
+      ),
     ]);
   } catch (e: any) {
     if (e?.code === "P2002") throw new ViewManageError("A view with this id already exists", "exists");
@@ -98,7 +117,10 @@ export async function duplicateView(sourceId: string, newId: string, name: strin
 export async function renameView(oldId: string, newId: string, name: string): Promise<string> {
   const safeId = safeViewId(newId);
   if (!safeId) throw new ViewManageError("Invalid view id", "invalid");
-  const old = await prisma.dashboard.findUnique({ where: { id: oldId }, include: { widgets: true } });
+  const old = await prisma.dashboard.findUnique({
+    where: { id: oldId },
+    include: { widgets: true, digests: { include: { entries: true } } },
+  });
   if (!old) throw new ViewManageError(`View "${oldId}" not found`, "not_found");
 
   const idMap: Record<string, string> = {};
@@ -117,6 +139,22 @@ export async function renameView(oldId: string, newId: string, name: string): Pr
             bgOpacity: w.bgOpacity,
             config: remapButtonTargets(w.config as any, (id) => idMap[id] ?? id),
             dashboardId: safeId,
+          },
+        }),
+      ),
+      ...old.digests.map((d) =>
+        prisma.digest.create({
+          data: {
+            slug: d.slug,
+            name: d.name,
+            dashboardId: safeId,
+            entries: {
+              create: d.entries.map((e) => ({
+                widgetId: idMap[e.widgetId] ?? e.widgetId,
+                order: e.order,
+                textOptions: e.textOptions as any,
+              })),
+            },
           },
         }),
       ),

@@ -15,6 +15,7 @@ import {
   X,
   Sun,
   Moon,
+  MessageSquareText,
 } from "lucide-react";
 import MagicFrameLogo from "@/components/MagicFrameLogo";
 import { LocaleProvider, useT } from "@/lib/i18n/LocaleProvider";
@@ -33,6 +34,7 @@ const NAV: NavItem[] = [
   { href: "/editor/views", label: "Views", icon: <Layers size={17} />, match: (p) => p === "/editor/views" || p.startsWith("/editor/views/") },
   { href: "/editor/integrations", label: "Integrationen", icon: <Plug size={17} />, match: (p) => p.startsWith("/editor/integrations") },
   { href: "/editor/modules", label: "Module", icon: <Package size={17} />, match: (p) => p.startsWith("/editor/modules") },
+  { href: "/editor/digests", label: "Digests", icon: <MessageSquareText size={17} />, match: (p) => p.startsWith("/editor/digests") },
   { href: "/editor/settings", label: "Einstellungen", icon: <SettingsIcon size={17} />, match: (p) => p.startsWith("/editor/settings") },
   { href: "/editor/backups", label: "Backups", icon: <Archive size={17} />, match: (p) => p.startsWith("/editor/backups") },
 ];

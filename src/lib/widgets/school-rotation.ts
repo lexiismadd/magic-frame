@@ -107,6 +107,81 @@ export function clampInt(v: unknown, min: number, max: number, fallback: number)
   return Math.min(max, Math.max(min, Math.round(n)));
 }
 
+export type ScheduleInfo = {
+  status: "before-start" | "after-end" | "school-day" | "weekend" | "no-school";
+  todayRotation: number | null;
+  reason: string;
+  upcoming: { date: Date; rotDay: number }[];
+};
+
+function isWeekday(d: Date) {
+  const dow = d.getDay();
+  return dow !== 0 && dow !== 6;
+}
+
+function isSchoolDay(d: Date, excl: Map<string, string>) {
+  return isWeekday(d) && !excl.has(isoDate(d));
+}
+
+function walkForward(
+  after: Date,
+  end: Date,
+  excl: Map<string, string>,
+  cycle: number,
+  count: number,
+  schoolDaysSoFar: number,
+) {
+  const result: { date: Date; rotDay: number }[] = [];
+  const cur = new Date(after);
+  cur.setDate(cur.getDate() + 1);
+  while (result.length < count && cur <= end) {
+    if (isSchoolDay(cur, excl)) {
+      schoolDaysSoFar++;
+      result.push({ date: new Date(cur), rotDay: ((schoolDaysSoFar - 1) % cycle) + 1 });
+    }
+    cur.setDate(cur.getDate() + 1);
+  }
+  return result;
+}
+
+export function getScheduleInfo(
+  today: Date,
+  start: Date,
+  end: Date,
+  excl: Map<string, string>,
+  cycle: number,
+  lookahead: number,
+): ScheduleInfo {
+  const todayStr = isoDate(today);
+
+  if (today < start) {
+    const upcoming = walkForward(new Date(start.getTime() - 86400000), end, excl, cycle, lookahead, 0);
+    return { status: "before-start", todayRotation: null, reason: "", upcoming };
+  }
+  if (today > end) {
+    return { status: "after-end", todayRotation: null, reason: "", upcoming: [] };
+  }
+
+  let schoolDays = 0;
+  let todayRotation: number | null = null;
+  const current = new Date(start);
+
+  while (current <= today) {
+    if (isSchoolDay(current, excl)) schoolDays++;
+    if (isoDate(current) === todayStr) {
+      if (isSchoolDay(current, excl)) todayRotation = ((schoolDays - 1) % cycle) + 1;
+      break;
+    }
+    current.setDate(current.getDate() + 1);
+  }
+
+  const upcoming = walkForward(today, end, excl, cycle, lookahead, schoolDays);
+  if (todayRotation !== null) return { status: "school-day", todayRotation, reason: "", upcoming };
+
+  const reason = excl.get(todayStr) || "";
+  return { status: !isWeekday(today) ? "weekend" : "no-school", todayRotation: null, reason, upcoming };
+}
+
 /** "YYYY-MM-DD Grund" pro Zeile; # beginnt einen Kommentar. */
 export function parseExclusions(text: unknown): Map<string, string> {
   const map = new Map<string, string>();

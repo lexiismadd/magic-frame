@@ -10,6 +10,7 @@ model Dashboard {
   id        String   @id @default(cuid())
   name      String
   widgets   Widget[]
+  digests   Digest[]
   wallpaper Json?
   settings  Json?
 }
@@ -206,4 +207,32 @@ model Widget {
   h           Int       // Höhe
   dashboardId String
   dashboard   Dashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+}
+
+// Ein Digest ist eine textbasierte Zusammenfassung der Widgets einer Ansicht.
+// Er referenziert eine Ansicht und filtert/konfiguriert deren Widgets für die
+// Textausgabe. Ein View kann mehrere Digests haben (Morgen-SMS, Abend-Recap).
+// Widget-IDs werden als Strings gespeichert (kein FK), weil applyLayoutSync
+// alle Widgets bei jedem Speichern löscht und neu anlegt.
+model Digest {
+  id          String        @id @default(cuid())
+  slug        String        @unique
+  name        String
+  dashboardId String
+  dashboard   Dashboard     @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+  entries     DigestEntry[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model DigestEntry {
+  id          String   @id @default(cuid())
+  digestId    String
+  digest      Digest   @relation(fields: [digestId], references: [id], onDelete: Cascade)
+  widgetId    String   // Plain string, NOT FK — widgets are deleted/recreated on every save
+  order       Int
+  textOptions Json     @default("{}")
+  createdAt   DateTime @default(now())
+
+  @@index([digestId, order])
 }
