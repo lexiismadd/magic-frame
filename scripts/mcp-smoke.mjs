@@ -109,7 +109,7 @@ const ok = (name, cond, extra = "") => {
 
   // 3. Katalog-Rundlauf
   const cat = await callTool(ADMIN, "get_widget_catalog", {});
-  ok("Katalog listet 19 Kern-Typen", cat.data.coreTypes?.length === 19);
+  ok("Katalog listet 20 Kern-Typen", cat.data.coreTypes?.length === 20);
   const clockSchema = await callTool(ADMIN, "get_widget_catalog", { type: "ClockWidget.tsx" });
   ok("Typ-Schema kommt als JSON Schema", !!clockSchema.data.configSchema?.properties);
 

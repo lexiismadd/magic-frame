@@ -145,6 +145,8 @@ const ENTITIES = [
     end_time: '2026-03-14 17:00:00',
   }),
 
+  entity('calendar.school_holidays', 'off', { friendly_name: 'School holidays' }),
+
   entity('todo.shopping', '3', { friendly_name: 'Shopping' }),
 
   // Three devices with a picture, a state and numbers — what the Status widget
@@ -187,6 +189,19 @@ const server = createServer((req, res) => {
     const id = decodeURIComponent(path.slice('/api/states/'.length));
     const e = byId.get(id);
     return e ? json(res, e) : json(res, { message: 'Entity not found.' }, 404);
+  }
+
+  // Calendar events, for the School rotation widget's holidays: an invented
+  // half-term three days from now, so the shot shows the count skipping it.
+  if (path.startsWith('/api/calendars/')) {
+    const id = decodeURIComponent(path.slice('/api/calendars/'.length));
+    if (id !== 'calendar.school_holidays') return json(res, []);
+    const day = (offset) => {
+      const d = new Date();
+      d.setDate(d.getDate() + offset);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    };
+    return json(res, [{ uid: 'half-term', summary: 'Half-term', start: { date: day(3) }, end: { date: day(5) } }]);
   }
 
   // Service calls are accepted and do nothing. A screenshot run must never be

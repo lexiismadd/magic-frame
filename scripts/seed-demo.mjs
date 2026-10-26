@@ -118,8 +118,31 @@ const DASHBOARDS = [
   },
 ];
 
+// The School rotation counts from a real first day of school, so its year is
+// laid around today: started eight weeks ago, a reminder on today's weekday.
+const isoDay = (offset) => {
+  const d = new Date();
+  d.setDate(d.getDate() + offset);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+const TODAY_NAME = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date().getDay()];
+const SCHOOL = {
+  startDate: isoDay(-56),
+  endDate: isoDay(240),
+  cycleDays: 6,
+  schedules: JSON.stringify([
+    { name: 'Mia', days: { 1: 'Gym, Music', 2: 'Art', 3: 'Library', 4: 'Swimming', 5: 'Science', 6: 'Music' } },
+    { name: 'Leo', days: { 1: 'Reading', 2: 'Gym', 3: 'Art, Math', 4: 'Computer', 5: 'Gym', 6: 'Library' } },
+  ]),
+  reminders: JSON.stringify([{ day: TODAY_NAME, text: 'Bring the gym bag', icon: '🎒', kid: 'Mia' }]),
+  noSchoolCalendar: 'calendar.school_holidays',
+  showUpcoming: true,
+  upcomingCount: 4,
+};
+
 /** One widget per dashboard, for cropped shots. id → [type, config, size]. */
 const SOLO = {
+  'w-school': ['SchoolRotationWidget.tsx', SCHOOL, [12, 10]],
   'w-clock': ['ClockWidget.tsx', CLOCK, [10, 6]],
   'w-weather': ['WeatherWidget.tsx', WEATHER, [12, 9]],
   'w-environment': ['EnvironmentWidget.tsx', { lat: '51.4545', lon: '-2.5879', showAqi: true, showPm25: true, showPm10: true, showPollen: true, hidePollenZero: true, showUv: true, showWind: true }, [14, 8]],

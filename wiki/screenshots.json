@@ -225,6 +225,28 @@
       }
     },
     {
+      "id": "school-rotation",
+      "page": "widgets-family.md",
+      "caption": "The School rotation widget: today's rotation day as a badge, each child's activities underneath, a reminder for the day, and the next school days.",
+      "shows": [
+        "src/components/widgets/SchoolRotationWidget.tsx"
+      ],
+      "needsLogin": false,
+      "element": ".react-grid-item",
+      "steps": [
+        {
+          "goto": "/view/w-school"
+        },
+        {
+          "waitFor": ".react-grid-item"
+        },
+        {
+          "wait": 3500
+        }
+      ],
+      "takenAt": {}
+    },
+    {
       "id": "ha-entity-pills",
       "page": "widgets-home-assistant.md",
       "caption": "The HA entity widget: one row per entity with its current state, and a control on the right for the ones you can switch.",

@@ -10,6 +10,10 @@ There is nothing to connect first. You add the widget, and it works — but most
 the point is putting things *onto* the screen from elsewhere, which is what
 [The companion API](companion-api.md) is for.
 
+A fifth belongs to the same kitchen: the **School rotation**
+(`SchoolRotationWidget.tsx`), for schools that run on a rotating plan of days
+instead of weekdays. It is described [at the end of this page](#school-rotation).
+
 All four also have the shared settings — font, colour, shadow, hiding rules —
 described once in [Widgets](widgets.md).
 
@@ -219,6 +223,98 @@ POST /api/todos?key=TOKEN&title=Take+the+bins+out&assignee=Emma&priority=high
 **Home Assistant and Todoist lists carry less.** Both are simple lists of titles,
 so a task from them has no assignee, and only Todoist supplies a due date and a
 priority. The person filter is therefore only offered with the local source.
+
+## School rotation
+
+Some schools do not plan by weekday but by a cycle of days: day 1 is gym and
+music, day 2 is art, and after day 6 it starts again at day 1 — whatever weekday
+that falls on. Holidays and days off pause the cycle. The **School rotation**
+widget (`Schulrotation`, `SchoolRotationWidget.tsx`) keeps count, shows today's
+day for each child, and what the next school days bring.
+
+The idea and the first version came from @sth2258, as a custom module first and
+then as this widget.
+
+![The School rotation widget: today's rotation day as a badge, each child's activities underneath, a reminder for the day, and the next school days.](img/school-rotation.png)
+
+### Setting it up
+
+1. Add a **School rotation** (`Schulrotation`) widget.
+2. Under **School year** (`Schuljahr`), enter the **first** and the **last day of
+   school**. Without both the tile asks for them; it never guesses a year.
+3. Set the **Rotation cycle** (`Rotationszyklus`) — how many days the plan has
+   before it repeats, 2 to 10.
+4. Under **Children** (`Kinder`), click **Add child** (`Kind hinzufügen`) for each
+   child. Give the card a name and fill in each rotation day with the subjects or
+   activities, separated by commas: `Gym, Music`.
+5. Tell it which days have no school — see below.
+
+### How the count works
+
+The widget walks the school year day by day from the first day of school.
+Saturdays and Sundays never count, and neither does any day without school.
+Every other day is the next day of the cycle: rotation day =
+((school days so far − 1) mod cycle) + 1. So a holiday does not skip a rotation
+day; the day after it simply continues where the plan left off.
+
+### Days without school
+
+Two ways, and they add up:
+
+- **A Home Assistant calendar** (`Ferienkalender aus Home Assistant`): pick a
+  `calendar.*` entity, for example a school-holiday calendar from a Home
+  Assistant integration. Every **all-day** event in it pauses the count for each
+  of its days — holidays, public holidays, days off. Events with a time, such as
+  a parents' evening at seven, do not. The widget reads the calendar through
+  `/api/calendar` for the whole school year and again every six hours. If the
+  calendar cannot be read, the tile says **Holiday calendar unreachable** rather
+  than quietly counting holidays as school days.
+- **A list of dates** (`Weitere schulfreie Tage`): one per line as `YYYY-MM-DD`,
+  then a reason — `2026-12-21 Christmas holidays`. Lines starting with `#` are
+  skipped. When a date is in both, the reason from the list is shown.
+
+### Weekly reminders
+
+Under **Weekly reminders** (`Wöchentliche Erinnerungen`), each reminder has a
+weekday, a text, an optional emoji and optionally one child — "Friday: bring the
+gym bag" for Mia. It appears on that weekday, but only when there is school, as an
+amber line under the day's activities. A reminder for a child takes that child's
+colour.
+
+### On the screen
+
+- On a school day: a badge with the rotation day in the accent colour, then one
+  line per child with that day's activities — each in the child's own colour,
+  with a small icon for common subjects.
+- On a weekend or a day without school: **No school**, with the reason when the
+  list or the calendar gives one.
+- Underneath: **Tomorrow** — or **Next school day** with its date — and, if
+  switched on, the following school days with their rotation day.
+- Before the first day of school it shows when school starts; after the last day,
+  **School's out**.
+- A schedule that cannot be read shows **Schedule unreadable** instead of
+  breaking the tile.
+
+### Options
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `startDate`, `endDate` | — | The first and last day of school, `YYYY-MM-DD`. Both are needed. |
+| `cycleDays` | 6 | Days in the plan before it repeats. |
+| `schedules` | — | The children, as JSON text: `[{"name":"Mia","days":{"1":"Gym, Music","2":["Art"]}}]`. A day can be a list or text with commas. |
+| `noSchoolCalendar` | — | A `calendar.*` entity whose all-day events pause the count. |
+| `noSchoolDates` | — | More days without school, one `YYYY-MM-DD reason` per line. |
+| `reminders` | — | JSON text: `[{"day":"Friday","text":"Gym bag","icon":"🎒","kid":"Mia"}]`. German weekday names work too. |
+| `showUpcoming`, `upcomingCount` | on, 3 | The list of following school days and how many. |
+| `accentColor` | blue | The colour of the day badge and the dates. |
+
+### Coming from the example module
+
+Up to 1.5.8 this was an example custom module (`custom:school-rotation`). An
+installed copy keeps working — the module system is unchanged. To move over, add
+the widget, open **Edit as JSON** (`Als JSON bearbeiten`) at the bottom of its
+settings, paste the module's schedules and reminders, and enter the year and the
+no-school dates.
 
 ## Ticking things off at the display needs a login
 
