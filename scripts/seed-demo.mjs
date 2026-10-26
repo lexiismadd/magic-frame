@@ -138,6 +138,8 @@ const SCHOOL = {
   noSchoolCalendar: 'calendar.school_holidays',
   showUpcoming: true,
   upcomingCount: 4,
+  responsiveText: false,
+  fontSize: 15,
 };
 
 /** One widget per dashboard, for cropped shots. id → [type, config, size]. */
