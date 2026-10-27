@@ -51,6 +51,7 @@ export default function DigestsListPage() {
   const t = useT();
   const router = useRouter();
   const [digests, setDigests] = useState<DigestSummary[] | null>(null);
+  const [viewNamesById, setViewNamesById] = useState<Record<string, string>>({});
   const [modal, setModal] = useState(false);
   const [formName, setFormName] = useState("");
   const [formSlug, setFormSlug] = useState("");
@@ -65,6 +66,15 @@ export default function DigestsListPage() {
   }
 
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    fetch("/api/dashboards", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data)) setViewNamesById(Object.fromEntries(data.map((d: any) => [d.id, d.name || d.id])));
+      })
+      .catch(() => {});
+  }, []);
 
   function openNewModal() {
     setError(null);
@@ -107,7 +117,7 @@ export default function DigestsListPage() {
 
   function viewNames(entries: DigestSummary["entries"]): string {
     const ids = [...new Set(entries.map((e) => e.dashboardId))];
-    return ids.length > 0 ? ids.join(", ") : "—";
+    return ids.length > 0 ? ids.map((id) => viewNamesById[id] ?? id).join(", ") : "—";
   }
 
   return (

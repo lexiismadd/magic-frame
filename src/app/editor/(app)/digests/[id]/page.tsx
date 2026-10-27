@@ -38,28 +38,30 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useT } from "@/lib/i18n/LocaleProvider";
+import { widgetTitle } from "@/app/editor/_types";
+import { parseSchedules } from "@/lib/widgets/school-rotation";
 
-const WIDGET_META: Record<string, { color: string; Icon: any; label: string }> = {
-  "ClockWidget.tsx":           { color: "rgba(59,130,246,0.55)",  Icon: ClockIcon,      label: "Clock" },
-  "WeatherWidget.tsx":         { color: "rgba(6,182,212,0.55)",   Icon: CloudSun,       label: "Weather" },
-  "CalendarWidget.tsx":        { color: "rgba(139,92,246,0.55)",  Icon: CalendarIcon,   label: "Calendar" },
-  "HomeAssistantWidget.tsx":   { color: "rgba(34,197,94,0.55)",   Icon: Zap,            label: "Home Assistant" },
-  "HANotificationWidget.tsx":  { color: "rgba(249,115,22,0.55)",  Icon: Bell,           label: "Notifications" },
-  "ButtonWidget.tsx":          { color: "rgba(245,158,11,0.55)",  Icon: Power,          label: "Button" },
-  "TimerWidget.tsx":           { color: "rgba(16,185,129,0.55)",  Icon: TimerIcon,      label: "Timer" },
-  "MessagesWidget.tsx":        { color: "rgba(217,70,239,0.55)",  Icon: MessageSquare,  label: "Messages" },
-  "ShoppingListWidget.tsx":    { color: "rgba(234,179,8,0.55)",   Icon: ShoppingCart,   label: "Shopping List" },
-  "TodosWidget.tsx":           { color: "rgba(99,102,241,0.55)",  Icon: ClipboardList,  label: "Todos" },
-  "ImageWidget.tsx":           { color: "rgba(168,85,247,0.55)",  Icon: ImageIcon,      label: "Image" },
-  "SensorWidget.tsx":          { color: "rgba(20,184,166,0.55)",  Icon: Gauge,          label: "Sensor" },
-  "EnvironmentWidget.tsx":     { color: "rgba(132,204,22,0.55)",  Icon: Leaf,           label: "Environment" },
-  "CameraWidget.tsx":          { color: "rgba(244,63,94,0.55)",   Icon: Video,          label: "Camera" },
-  "MediaPlayerWidget.tsx":     { color: "rgba(236,72,153,0.55)",  Icon: Music,          label: "Media" },
-  "RssWidget.tsx":             { color: "rgba(245,158,11,0.55)",  Icon: Rss,            label: "RSS" },
-  "QrWidget.tsx":              { color: "rgba(6,182,212,0.55)",   Icon: QrCode,         label: "QR Code" },
-  "StatusWidget.tsx":          { color: "rgba(14,165,233,0.55)",  Icon: Activity,       label: "Status" },
-  "TextWidget.tsx":            { color: "rgba(14,165,233,0.55)",  Icon: TypeIcon,       label: "Text" },
-  "SchoolRotationWidget.tsx":  { color: "rgba(59,130,246,0.55)",  Icon: GraduationCap,  label: "School Rotation" },
+const WIDGET_META: Record<string, { color: string; Icon: any }> = {
+  "ClockWidget.tsx":           { color: "rgba(59,130,246,0.55)",  Icon: ClockIcon },
+  "WeatherWidget.tsx":         { color: "rgba(6,182,212,0.55)",   Icon: CloudSun },
+  "CalendarWidget.tsx":        { color: "rgba(139,92,246,0.55)",  Icon: CalendarIcon },
+  "HomeAssistantWidget.tsx":   { color: "rgba(34,197,94,0.55)",   Icon: Zap },
+  "HANotificationWidget.tsx":  { color: "rgba(249,115,22,0.55)",  Icon: Bell },
+  "ButtonWidget.tsx":          { color: "rgba(245,158,11,0.55)",  Icon: Power },
+  "TimerWidget.tsx":           { color: "rgba(16,185,129,0.55)",  Icon: TimerIcon },
+  "MessagesWidget.tsx":        { color: "rgba(217,70,239,0.55)",  Icon: MessageSquare },
+  "ShoppingListWidget.tsx":    { color: "rgba(234,179,8,0.55)",   Icon: ShoppingCart },
+  "TodosWidget.tsx":           { color: "rgba(99,102,241,0.55)",  Icon: ClipboardList },
+  "ImageWidget.tsx":           { color: "rgba(168,85,247,0.55)",  Icon: ImageIcon },
+  "SensorWidget.tsx":          { color: "rgba(20,184,166,0.55)",  Icon: Gauge },
+  "EnvironmentWidget.tsx":     { color: "rgba(132,204,22,0.55)",  Icon: Leaf },
+  "CameraWidget.tsx":          { color: "rgba(244,63,94,0.55)",   Icon: Video },
+  "MediaPlayerWidget.tsx":     { color: "rgba(236,72,153,0.55)",  Icon: Music },
+  "RssWidget.tsx":             { color: "rgba(245,158,11,0.55)",  Icon: Rss },
+  "QrWidget.tsx":              { color: "rgba(6,182,212,0.55)",   Icon: QrCode },
+  "StatusWidget.tsx":          { color: "rgba(14,165,233,0.55)",  Icon: Activity },
+  "TextWidget.tsx":            { color: "rgba(14,165,233,0.55)",  Icon: TypeIcon },
+  "SchoolRotationWidget.tsx":  { color: "rgba(59,130,246,0.55)",  Icon: GraduationCap },
 };
 
 const SUPPORTED_TYPES = new Set([
@@ -90,10 +92,12 @@ type DigestData = {
 
 function TextOptionsEditor({
   widgetType,
+  widgetConfig,
   options,
   onChange,
 }: {
   widgetType: string;
+  widgetConfig: any;
   options: Record<string, any>;
   onChange: (opts: Record<string, any>) => void;
 }) {
@@ -104,14 +108,17 @@ function TextOptionsEditor({
       return (
         <div className="space-y-3 pl-9">
           <label className="block">
-            <span className="text-xs text-[var(--mf-fg)]/60 block mb-1">{t("Kind filtern")}</span>
-            <input
-              type="text"
+            <span className="text-xs text-[var(--mf-fg)]/60 block mb-1">{t("Kind")}</span>
+            <select
               value={options.kidFilter || ""}
-              onChange={(e) => onChange({ ...options, kidFilter: e.target.value })}
-              placeholder={t("alle Kinder")}
+              onChange={(e) => onChange({ ...options, kidFilter: e.target.value || undefined })}
               className="w-full bg-[var(--mf-surface)] border border-[var(--mf-bdr)]/10 text-[var(--mf-fg)] rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500"
-            />
+            >
+              <option value="">{t("Alle Kinder")}</option>
+              {(parseSchedules(widgetConfig?.schedules) ?? []).map((kid) => (
+                <option key={kid.name} value={kid.name}>{kid.name}</option>
+              ))}
+            </select>
           </label>
           <label className="flex items-center gap-2 text-sm">
             <input
@@ -154,13 +161,13 @@ function TextOptionsEditor({
           <label className="block">
             <span className="text-xs text-[var(--mf-fg)]/60 block mb-1">{t("Filter")}</span>
             <select
-              value={options.dueFilter || "today"}
+              value={options.dueFilter || "all"}
               onChange={(e) => onChange({ ...options, dueFilter: e.target.value })}
               className="w-full bg-[var(--mf-surface)] border border-[var(--mf-bdr)]/10 text-[var(--mf-fg)] rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500"
             >
-              <option value="today">{t("Fällig heute")}</option>
-              <option value="overdue">{t("Überfällig")}</option>
               <option value="all">{t("Alle offenen")}</option>
+              <option value="today">{t("Fällig bis heute")}</option>
+              <option value="overdue">{t("Überfällig")}</option>
             </select>
           </label>
         </div>
@@ -441,7 +448,7 @@ export default function DigestEditorPage({
             <ArrowLeft size={14} /> {t("Alle Digests")}
           </Link>
 
-          <div className="flex items-end justify-between gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
             <div className="flex-1 min-w-0">
               <div className="text-[11px] font-medium uppercase tracking-[0.2em] text-[var(--mf-fg)]/40 mb-2">
                 Digest
@@ -491,11 +498,11 @@ export default function DigestEditorPage({
           </div>
         </header>
 
-        <DigestEndpointBar slug={slug} />
+        <DigestEndpointBar slug={slug} name={name} />
 
         {error && (
           <div className="mb-6 text-sm text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg p-3">
-            {error}
+            {t(error)}
           </div>
         )}
 
@@ -517,9 +524,8 @@ export default function DigestEditorPage({
                   const key = `${entry.dashboardId}:${entry.widgetId}`;
                   const widgetInfo = allWidgets.get(key);
                   const widgetType = widgetInfo?.type || "";
-                  const meta = WIDGET_META[widgetType];
                   const isExpanded = expanded.has(key);
-                  const displayName = widgetInfo?.label || meta?.label || widgetType.replace(".tsx", "");
+                  const displayName = widgetInfo ? widgetTitle(widgetType, widgetInfo.label, t) : t("Widget nicht mehr da");
                   const viewName = widgetInfo?.dashboardName || entry.dashboardId;
 
                   return (
@@ -568,6 +574,7 @@ export default function DigestEditorPage({
                         <div className="px-3 pb-3 border-t border-[var(--mf-bdr)]/5 pt-3">
                           <TextOptionsEditor
                             widgetType={widgetType}
+                            widgetConfig={widgetInfo?.config}
                             options={entry.textOptions}
                             onChange={(opts) =>
                               updateTextOptions(entry.dashboardId, entry.widgetId, opts)
@@ -591,7 +598,6 @@ export default function DigestEditorPage({
                   <pre className="text-sm text-[var(--mf-fg)]/80 whitespace-pre-wrap font-mono leading-relaxed">
                     {preview}
                   </pre>
-                  <EndpointCopy slug={slug} />
                 </div>
               </div>
             )}
@@ -625,8 +631,7 @@ export default function DigestEditorPage({
                       </div>
                       <div className="space-y-0.5">
                         {supported.map((w) => {
-                          const meta = WIDGET_META[w.type];
-                          const displayName = w.label || meta?.label || w.type.replace(".tsx", "");
+                          const displayName = widgetTitle(w.type, w.label, t);
                           return (
                             <button
                               key={w.id}
@@ -645,11 +650,11 @@ export default function DigestEditorPage({
                           );
                         })}
                         {unsupported.map((w) => {
-                          const meta = WIDGET_META[w.type];
-                          const displayName = w.label || meta?.label || w.type.replace(".tsx", "");
+                          const displayName = widgetTitle(w.type, w.label, t);
                           return (
                             <div
                               key={w.id}
+                              title={t("Für dieses Widget gibt es noch keinen Text.")}
                               className="flex items-center gap-2 p-2 rounded-lg text-xs opacity-25 cursor-not-allowed"
                             >
                               <WidgetIcon type={w.type} size={13} />
@@ -670,87 +675,88 @@ export default function DigestEditorPage({
   );
 }
 
-function DigestEndpointBar({ slug }: { slug: string }) {
+// Die Adresse ohne Token: "Öffnen" und die Vorschau laufen über die Anmeldung
+// im Browser, und ein ?key= in der Adresse landet im Verlauf und in Logs.
+// Home Assistant schickt den Token als Header — dafür das Beispiel darunter.
+function DigestEndpointBar({ slug, name }: { slug: string; name: string }) {
   const t = useT();
-  const [token, setToken] = useState<string | null>(null);
   const [origin, setOrigin] = useState("");
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<"url" | "yaml" | null>(null);
 
   useEffect(() => {
     setOrigin(window.location.origin);
-    fetch("/api/auth/shortcut-token", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((d) => setToken(d.token ?? null))
-      .catch(() => {});
   }, []);
 
-  const fullUrl = token
-    ? `${origin}/api/digest/${slug}?key=${token}`
-    : `${origin}/api/digest/${slug}`;
+  const url = `${origin}/api/digest/${slug}`;
+  // Der Zustand eines Sensors fasst höchstens 255 Zeichen, also steht der
+  // ganze Text im Attribut "text". Alle 15 Minuten reicht für eine Nachricht
+  // am Morgen und schont Kalender und Wetterdienst.
+  const yaml = [
+    "rest:",
+    `  - resource: ${url}?format=json`,
+    "    headers:",
+    "      Authorization: Bearer TOKEN",
+    "    scan_interval: 900",
+    "    sensor:",
+    `      - name: ${JSON.stringify(name || slug)}`,
+    '        value_template: "{{ value_json.text[:255] }}"',
+    "        json_attributes:",
+    "          - text",
+  ].join("\n");
 
-  function copy() {
-    navigator.clipboard?.writeText(fullUrl).then(
-      () => { setCopied(true); setTimeout(() => setCopied(false), 1500); },
+  function copy(what: "url" | "yaml", text: string) {
+    navigator.clipboard?.writeText(text).then(
+      () => { setCopied(what); setTimeout(() => setCopied(null), 1500); },
       () => {},
     );
   }
 
   return (
-    <div className="mb-6 bg-[var(--mf-surface-2)]/60 border border-[var(--mf-bdr)]/10 rounded-xl px-4 py-3 flex items-center gap-3">
-      <div className="flex-1 min-w-0">
-        <div className="text-[10px] uppercase tracking-widest text-[var(--mf-fg)]/40 mb-1">
-          {t("Endpoint")}
+    <div className="mb-6 bg-[var(--mf-surface-2)]/60 border border-[var(--mf-bdr)]/10 rounded-xl px-4 py-3">
+      <div className="flex items-center gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="text-[10px] uppercase tracking-widest text-[var(--mf-fg)]/40 mb-1">
+            {t("Adresse")}
+          </div>
+          <code className="text-xs font-mono text-[var(--mf-fg)]/70 break-all block">{url}</code>
         </div>
-        <code className="text-xs font-mono text-[var(--mf-fg)]/70 break-all block">
-          {token ? fullUrl : `${origin}/api/digest/${slug}?key=...`}
-        </code>
+        <a
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          className="text-xs text-[var(--mf-fg)]/50 hover:text-[var(--mf-fg)] bg-[var(--mf-elev)]/5 hover:bg-[var(--mf-elev)]/10 rounded-md px-2.5 h-7 flex items-center gap-1 shrink-0"
+        >
+          <ExternalLink size={11} /> {t("Öffnen")}
+        </a>
+        <button
+          onClick={() => copy("url", url)}
+          className="text-xs text-[var(--mf-fg)]/50 hover:text-[var(--mf-fg)] bg-[var(--mf-elev)]/5 hover:bg-[var(--mf-elev)]/10 rounded-md px-2.5 h-7 flex items-center gap-1 shrink-0"
+        >
+          {copied === "url" ? <Check size={11} /> : <Copy size={11} />}
+          {copied === "url" ? t("Kopiert") : t("Kopieren")}
+        </button>
       </div>
-      <a
-        href={fullUrl}
-        target="_blank"
-        rel="noreferrer"
-        className="text-xs text-[var(--mf-fg)]/50 hover:text-[var(--mf-fg)] bg-[var(--mf-elev)]/5 hover:bg-[var(--mf-elev)]/10 rounded-md px-2.5 h-7 flex items-center gap-1 shrink-0"
-      >
-        <ExternalLink size={11} /> {t("Öffnen")}
-      </a>
-      <button
-        onClick={copy}
-        className="text-xs text-[var(--mf-fg)]/50 hover:text-[var(--mf-fg)] bg-[var(--mf-elev)]/5 hover:bg-[var(--mf-elev)]/10 rounded-md px-2.5 h-7 flex items-center gap-1 shrink-0"
-      >
-        {copied ? <Check size={11} /> : <Copy size={11} />}
-        {copied ? t("Kopiert") : t("Kopieren")}
-      </button>
-    </div>
-  );
-}
 
-function EndpointCopy({ slug }: { slug: string }) {
-  const t = useT();
-  const [url, setUrl] = useState("");
-  const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    setUrl(`${window.location.origin}/api/digest/${slug}`);
-  }, [slug]);
-
-  return (
-    <div className="mt-3 pt-3 border-t border-[var(--mf-bdr)]/5 flex items-center gap-2">
-      <code className="text-xs text-[var(--mf-fg)]/40 font-mono flex-1 truncate">
-        /api/digest/{slug}
-      </code>
-      <button
-        onClick={() => {
-          if (!url) return;
-          navigator.clipboard?.writeText(url).then(
-            () => { setCopied(true); setTimeout(() => setCopied(false), 1500); },
-            () => {},
-          );
-        }}
-        className="text-xs text-[var(--mf-fg)]/40 hover:text-[var(--mf-fg)]/70 flex items-center gap-1"
-      >
-        <Copy size={11} />
-        {copied ? t("Kopiert") : t("URL kopieren")}
-      </button>
+      <details className="mt-3 border-t border-[var(--mf-bdr)]/5 pt-3">
+        <summary className="text-xs text-[var(--mf-fg)]/60 hover:text-[var(--mf-fg)] cursor-pointer select-none">
+          {t("Für Home Assistant")}
+        </summary>
+        <p className="text-xs text-[var(--mf-fg)]/50 mt-2 leading-relaxed">
+          {t("In die configuration.yaml, dann TOKEN durch den Companion-API-Token aus Einstellungen → Geräte & Apps ersetzen. Der Zustand eines Sensors fasst nur 255 Zeichen — der ganze Text steht im Attribut text.")}
+        </p>
+        <div className="relative mt-2">
+          <pre className="text-[11px] font-mono [font-variant-ligatures:none] text-[var(--mf-fg)]/70 bg-[var(--mf-surface)] border border-[var(--mf-bdr)]/10 rounded-lg p-3 overflow-x-auto whitespace-pre">
+            {yaml}
+          </pre>
+          <button
+            onClick={() => copy("yaml", yaml)}
+            className="absolute top-2 right-2 text-xs text-[var(--mf-fg)]/50 hover:text-[var(--mf-fg)] bg-[var(--mf-surface-2)] border border-[var(--mf-bdr)]/10 rounded-md px-2 h-6 flex items-center gap-1"
+          >
+            {copied === "yaml" ? <Check size={11} /> : <Copy size={11} />}
+            {copied === "yaml" ? t("Kopiert") : t("Kopieren")}
+          </button>
+        </div>
+      </details>
     </div>
   );
 }
