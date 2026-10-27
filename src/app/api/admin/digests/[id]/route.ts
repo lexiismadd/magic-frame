@@ -1,122 +1,100 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
-import { Pool } from "pg";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { getSession } from "@/lib/auth/session";
+import {
+  verifyAdmin,
+  ForbiddenError,
+  forbiddenResponse,
+  UnauthorizedError,
+  unauthorizedResponse,
+} from "@/lib/auth/dal";
+import { prisma } from "@/lib/companion/prisma";
+import { digestEntries, digestName, digestSlug } from "@/lib/digest/input";
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-const adapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter });
+export const dynamic = "force-dynamic";
 
-async function requireAuth() {
-  const session = await getSession();
-  if (!session.userId) throw new Error("Unauthorized");
+type Ctx = { params: Promise<{ id: string }> };
+
+async function guard(): Promise<NextResponse | null> {
+  try {
+    await verifyAdmin();
+    return null;
+  } catch (err) {
+    if (err instanceof UnauthorizedError) return unauthorizedResponse();
+    if (err instanceof ForbiddenError) return forbiddenResponse();
+    throw err;
+  }
 }
 
-export async function GET(
-  _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  try {
-    await requireAuth();
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+const notFound = () => NextResponse.json({ error: "Digest nicht gefunden." }, { status: 404 });
+
+export async function GET(_req: NextRequest, { params }: Ctx) {
+  const denied = await guard();
+  if (denied) return denied;
 
   const { id } = await params;
   const digest = await prisma.digest.findUnique({
     where: { id },
-    include: {
-      entries: { orderBy: { order: "asc" } },
-    },
+    include: { entries: { orderBy: { order: "asc" } } },
   });
-
-  if (!digest) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
-
-  return NextResponse.json(digest);
+  return digest ? NextResponse.json(digest) : notFound();
 }
 
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  try {
-    await requireAuth();
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+// Ersetzt Name, Adresse und die ganze Widget-Liste in einem Zug — wie das
+// Speichern einer Ansicht. Was fehlt, bleibt, wie es war.
+export async function PUT(req: NextRequest, { params }: Ctx) {
+  const denied = await guard();
+  if (denied) return denied;
 
   const { id } = await params;
-  const body = await req.json();
-  const { name, slug, entries } = body;
-
   const existing = await prisma.digest.findUnique({ where: { id } });
-  if (!existing) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!existing) return notFound();
+
+  const body = await req.json().catch(() => null);
+  const name = body?.name === undefined ? existing.name : digestName(body.name);
+  const slug = body?.slug === undefined ? existing.slug : digestSlug(body.slug);
+  if (!name || !slug) {
+    return NextResponse.json({ error: "Name und Adresse fehlen." }, { status: 400 });
+  }
+  const entries = body?.entries === undefined ? undefined : digestEntries(body.entries);
+  if (entries === null) {
+    return NextResponse.json({ error: "Die Widget-Liste ist ungültig." }, { status: 400 });
   }
 
-  const safeSlug = slug
-    ? slug
-        .toLowerCase()
-        .replace(/[^a-z0-9-]/g, "-")
-        .replace(/-+/g, "-")
-        .replace(/^-|-$/g, "")
-    : existing.slug;
-
-  await prisma.$transaction([
-    prisma.digestEntry.deleteMany({ where: { digestId: id } }),
-    prisma.digest.update({
-      where: { id },
-      data: {
-        name: name ?? existing.name,
-        slug: safeSlug,
-        ...(entries
-          ? {
-              entries: {
-                create: entries.map((e: any, i: number) => ({
-                  dashboardId: e.dashboardId,
-                  widgetId: e.widgetId,
-                  order: e.order ?? i,
-                  textOptions: e.textOptions ?? {},
-                })),
-              },
-            }
-          : {}),
-      },
-    }),
-  ]);
+  try {
+    await prisma.$transaction([
+      ...(entries ? [prisma.digestEntry.deleteMany({ where: { digestId: id } })] : []),
+      prisma.digest.update({
+        where: { id },
+        data: {
+          name,
+          slug,
+          ...(entries?.length ? { entries: { create: entries as any } } : {}),
+        },
+      }),
+    ]);
+  } catch (e: any) {
+    if (e?.code === "P2002") {
+      return NextResponse.json({ error: "Diese Adresse hat schon ein anderer Digest." }, { status: 409 });
+    }
+    throw e;
+  }
 
   const updated = await prisma.digest.findUnique({
     where: { id },
-    include: {
-      entries: { orderBy: { order: "asc" } },
-    },
+    include: { entries: { orderBy: { order: "asc" } } },
   });
-
   return NextResponse.json(updated);
 }
 
-export async function DELETE(
-  _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  try {
-    await requireAuth();
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+export async function DELETE(_req: NextRequest, { params }: Ctx) {
+  const denied = await guard();
+  if (denied) return denied;
 
   const { id } = await params;
   try {
     await prisma.digest.delete({ where: { id } });
   } catch (e: any) {
-    if (e?.code === "P2025") {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
+    if (e?.code === "P2025") return notFound();
     throw e;
   }
-
   return NextResponse.json({ ok: true });
 }

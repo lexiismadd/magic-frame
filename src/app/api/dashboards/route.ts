@@ -145,6 +145,16 @@ export async function POST(req: NextRequest) {
           });
        }
 
+       // Digests zeigen auf Ansicht + Widget-id — hier ändern sich beide. Ohne
+       // das verlöre jeder Digest diese Widgets beim ersten Umbenennen.
+       const digestEntries = await prisma.digestEntry.findMany({ where: { dashboardId: oldId } });
+       for (const e of digestEntries) {
+          await prisma.digestEntry.update({
+             where: { id: e.id },
+             data: { dashboardId: safeId, widgetId: idMap[e.widgetId] ?? e.widgetId },
+          });
+       }
+
        // Delete old
        await prisma.dashboard.delete({ where: { id: oldId } });
 

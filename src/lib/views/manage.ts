@@ -58,7 +58,7 @@ export async function createView(id: string, name: string, orientation: "portrai
   return safeId;
 }
 
-/** Remap digest entries that reference widgets from a given dashboard. */
+/** Digest-Einträge, die auf Widgets dieser Ansicht zeigen, auf die neuen ids umbiegen. */
 async function remapDigestEntries(
   oldDashboardId: string,
   newDashboardId: string,
@@ -79,7 +79,7 @@ async function remapDigestEntries(
   );
 }
 
-/** Dupliziert eine Ansicht samt Widgets; Digest-Einträge bleiben beim Original. */
+/** Dupliziert eine Ansicht samt Widgets; Button-Ziele wandern mit, Digest-Einträge bleiben beim Original. */
 export async function duplicateView(sourceId: string, newId: string, name: string): Promise<string> {
   const safeId = safeViewId(newId);
   if (!safeId) throw new ViewManageError("Invalid view id", "invalid");
@@ -118,7 +118,7 @@ export async function duplicateView(sourceId: string, newId: string, name: strin
   return safeId;
 }
 
-/** Benennt die URL einer Ansicht um (kopieren + altes löschen); digest entries follow. */
+/** Benennt die URL einer Ansicht um (kopieren + altes löschen); Button-Ziele und Digest-Einträge ziehen mit. */
 export async function renameView(oldId: string, newId: string, name: string): Promise<string> {
   const safeId = safeViewId(newId);
   if (!safeId) throw new ViewManageError("Invalid view id", "invalid");
