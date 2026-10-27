@@ -123,6 +123,10 @@ function isSchoolDay(d: Date, excl: Map<string, string>) {
   return isWeekday(d) && !excl.has(isoDate(d));
 }
 
+// Die Zählung ist die des Beispiel-Moduls und bleibt es (#102): Tag für Tag
+// durchs Schuljahr, jeder Werktag, der nicht ausfällt, zählt; Rotationstag =
+// ((Zähler - 1) mod Zyklus) + 1. Kachel und Digest rechnen beide hiermit,
+// damit die SMS am Morgen nie einen anderen Tag nennt als die Wand.
 function walkForward(
   after: Date,
   end: Date,

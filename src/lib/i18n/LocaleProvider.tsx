@@ -2,14 +2,10 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { EN } from "./en";
-import { NB } from "./nb";
-import { NN } from "./nn";
-import { PT_BR } from "./pt-BR";
 import { isLocale, type Locale } from "./locales";
+import { translate } from "./translate";
 
 export type { Locale } from "./locales";
-
-const DICTS: Partial<Record<Locale, Record<string, string>>> = { en: EN, nb: NB, nn: NN, "pt-BR": PT_BR };
 
 type LocaleCtx = {
   locale: Locale;
@@ -76,10 +72,7 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   };
 
-  // nb/nn/pt-BR fall back to English (not German) for any key that hasn't been
-  // translated yet, since English is the more useful default for readers
-  // of those locales.
-  const t = (de: string) => (locale === "de" ? de : DICTS[locale]?.[de] ?? EN[de] ?? de);
+  const t = (de: string) => translate(locale, de);
 
   return <Ctx.Provider value={{ locale, setLocale, t }}>{children}</Ctx.Provider>;
 }
