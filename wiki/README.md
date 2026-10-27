@@ -86,6 +86,7 @@ lying, and `scripts/shoot-wiki.mjs` retakes them.
 
 - [The companion API](companion-api.md) — driving Magic Frame over HTTP, and iOS Shortcuts
 - [Agents and MCP](mcp.md) — letting an AI agent such as Claude Code run your views and your household lists
+- [Digests](digests.md) — widgets as a text summary, for notifications and SMS through Home Assistant
 - [Custom modules](custom-modules.md) — installing a widget somebody else wrote
 - [Writing a module](module-development.md) — building your own widget
 

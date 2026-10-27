@@ -54,5 +54,6 @@ For the complete text in one request, fetch /llms-full.txt.
 
 - [The companion API](https://github.com/jeremiaa/magic-frame/blob/main/wiki/companion-api.md): driving Magic Frame over HTTP, and iOS Shortcuts
 - [Agents and MCP](https://github.com/jeremiaa/magic-frame/blob/main/wiki/mcp.md): the built-in MCP server at /api/mcp, connecting Claude Code, and every tool by role
+- [Digests](https://github.com/jeremiaa/magic-frame/blob/main/wiki/digests.md): widgets as a text summary at /api/digest/<address>, for notifications and SMS through Home Assistant
 - [Custom modules](https://github.com/jeremiaa/magic-frame/blob/main/wiki/custom-modules.md): installing a widget somebody else wrote
 - [Writing a module](https://github.com/jeremiaa/magic-frame/blob/main/wiki/module-development.md): building your own widget
