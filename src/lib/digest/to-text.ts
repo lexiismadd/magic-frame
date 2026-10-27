@@ -12,6 +12,7 @@ import {
   clampInt,
   getScheduleInfo,
 } from "@/lib/widgets/school-rotation";
+import { wmoToText } from "@/lib/weather/wmo";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const adapter = new PrismaPg(pool);
@@ -83,6 +84,14 @@ async function widgetToText(
       return todosToText(widget.config, opts ?? {}, today);
     case "ShoppingListWidget.tsx":
       return shoppingListToText(opts ?? {});
+    case "WeatherWidget.tsx":
+      return weatherToText(widget.config, opts ?? {});
+    case "SensorWidget.tsx":
+      return sensorToText(widget.config, opts ?? {});
+    case "EnvironmentWidget.tsx":
+      return environmentToText(widget.config, opts ?? {});
+    case "TextWidget.tsx":
+      return textWidgetToText(widget.config);
     default:
       return [];
   }
@@ -257,4 +266,242 @@ async function shoppingListToText(opts: any): Promise<string[]> {
   } catch {
     return [];
   }
+}
+
+function weatherApiUrl(config: any): URL {
+  const base = process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
+  const url = new URL("/api/weather", base);
+  if (config.lat) url.searchParams.set("lat", String(config.lat));
+  if (config.lon) url.searchParams.set("lon", String(config.lon));
+  if (config.provider) url.searchParams.set("provider", config.provider);
+  if (config.unitTemp) url.searchParams.set("temperature_unit", config.unitTemp);
+  if (config.unitWind) url.searchParams.set("wind_speed_unit", config.unitWind);
+  if (config.haEntity) url.searchParams.set("haEntity", config.haEntity);
+  if (config.wuStation) url.searchParams.set("wuStation", config.wuStation);
+  return url;
+}
+
+const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+function dailyForecastLines(data: any, tempUnit: string, count: number, startIdx = 1): string[] {
+  const daily = data.daily;
+  if (!daily?.temperature_2m_max?.length) return [];
+  const lines: string[] = [];
+  const max = Math.min(count, daily.temperature_2m_max.length - startIdx);
+  for (let i = startIdx; i < startIdx + max; i++) {
+    const d = new Date(daily.time?.[i] || Date.now());
+    const day = DAY_NAMES[d.getDay()];
+    const hi = Math.round(daily.temperature_2m_max[i]);
+    const lo = Math.round(daily.temperature_2m_min[i]);
+    const cond = wmoToText(daily.weather_code?.[i] ?? 0, "en");
+    lines.push(`${day}: ${lo}–${hi}${tempUnit} ${cond}`);
+  }
+  return lines;
+}
+
+function todayHourlyLines(data: any, tempUnit: string): string[] {
+  const h = data.hourly;
+  if (!h || !Array.isArray(h.time)) return [];
+  const now = new Date();
+  const midnight = new Date(now);
+  midnight.setHours(23, 59, 59, 999);
+  let startIdx = h.time.findIndex((t: string) => new Date(t).getTime() >= now.getTime() - 3600000);
+  if (startIdx < 0) startIdx = 0;
+  const lines: string[] = [];
+  for (let idx = startIdx; idx < h.time.length; idx++) {
+    const d = new Date(h.time[idx]);
+    if (d.getTime() > midnight.getTime()) break;
+    const hh = d.getHours().toString().padStart(2, "0") + ":00";
+    const temp = Math.round(h.temperature_2m?.[idx] ?? 0);
+    const cond = wmoToText(h.weather_code?.[idx] ?? 0, "en");
+    const pop = h.precipitation_probability?.[idx];
+    const popStr = typeof pop === "number" && pop > 0 ? ` ${pop}%` : "";
+    lines.push(`${hh} ${temp}${tempUnit} ${cond}${popStr}`);
+  }
+  return lines;
+}
+
+async function weatherToText(config: any, opts: any): Promise<string[]> {
+  try {
+    const res = await fetch(weatherApiUrl(config).toString(), {
+      cache: "no-store",
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) return ["(weather unavailable)"];
+    const data = await res.json();
+
+    const cur = data.current;
+    if (!cur) return ["(weather unavailable)"];
+
+    const tempUnit = config.unitTemp === "fahrenheit" ? "°F" : "°C";
+    const condition = wmoToText(cur.weather_code ?? 0, "en");
+    const temp = Math.round(cur.temperature_2m ?? 0);
+    const feelsLike = Math.round(cur.apparent_temperature ?? temp);
+    const detail = opts.detail || "oneliner";
+
+    if (detail === "oneliner") {
+      const parts = [`${condition}, ${temp}${tempUnit}`];
+      if (Math.abs(feelsLike - temp) >= 2) parts.push(`(feels ${feelsLike}${tempUnit})`);
+      return [parts.join(" ")];
+    }
+
+    if (detail === "highlow") {
+      const daily = data.daily;
+      if (!daily?.temperature_2m_max?.length) return [`${condition}, ${temp}${tempUnit}`];
+      const hi = Math.round(daily.temperature_2m_max[0]);
+      const lo = Math.round(daily.temperature_2m_min[0]);
+      return [`${condition}, ${temp}${tempUnit} (${lo}–${hi}${tempUnit})`];
+    }
+
+    if (detail === "hourly") {
+      const hourly = todayHourlyLines(data, tempUnit);
+      if (hourly.length === 0) return [`${condition}, ${temp}${tempUnit}`];
+      return hourly;
+    }
+
+    const lines: string[] = [];
+    lines.push(`${condition}, ${temp}${tempUnit}`);
+    if (Math.abs(feelsLike - temp) >= 2) lines.push(`Feels like ${feelsLike}${tempUnit}`);
+    if (cur.relative_humidity_2m != null) lines.push(`Humidity: ${cur.relative_humidity_2m}%`);
+    if (cur.wind_speed_10m != null) {
+      lines.push(`Wind: ${Math.round(cur.wind_speed_10m)} ${config.unitWind || "kmh"}`);
+    }
+    lines.push(...dailyForecastLines(data, tempUnit, 3));
+    return lines;
+  } catch {
+    return ["(weather unavailable)"];
+  }
+}
+
+async function sensorToText(config: any, opts: any): Promise<string[]> {
+  try {
+    const entities: any[] = config.entities || [];
+    const slots = entities.filter((s: any) => s.entityId);
+    if (slots.length === 0) return [];
+
+    const base = process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
+    const ids = slots.map((s: any) => s.entityId).join(",");
+    const url = new URL("/api/ha/state", base);
+    url.searchParams.set("ids", ids);
+
+    const res = await fetch(url.toString(), {
+      cache: "no-store",
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) return ["(sensors unavailable)"];
+    const data = await res.json();
+
+    const lines: string[] = [];
+    for (const slot of slots) {
+      const entity = data[slot.entityId];
+      if (!entity) continue;
+      const val = entity.state;
+      if (val === "unavailable" || val === "unknown") continue;
+      const label = slot.label || entity.attributes?.friendly_name || slot.entityId;
+      const unit = slot.unit || entity.attributes?.unit_of_measurement || "";
+      const decimals = typeof slot.decimals === "number" ? slot.decimals : undefined;
+      const formatted = decimals !== undefined && !isNaN(Number(val))
+        ? Number(val).toFixed(decimals)
+        : val;
+      lines.push(`${label}: ${formatted}${unit ? " " + unit : ""}`);
+    }
+    return lines;
+  } catch {
+    return ["(sensors unavailable)"];
+  }
+}
+
+async function environmentToText(config: any, opts: any): Promise<string[]> {
+  try {
+    const base = process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
+    const url = new URL("/api/environment", base);
+    if (config.lat) url.searchParams.set("lat", String(config.lat));
+    if (config.lon) url.searchParams.set("lon", String(config.lon));
+    if (config.unitWind) url.searchParams.set("wind_speed_unit", config.unitWind);
+
+    const res = await fetch(url.toString(), {
+      cache: "no-store",
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) return ["(environment unavailable)"];
+    const data = await res.json();
+
+    const lines: string[] = [];
+    const scale = config.aqiScale === "us" ? "us" : "european";
+
+    if (config.showAqi !== false && data.aqi) {
+      const val = scale === "us" ? data.aqi.us : data.aqi.european;
+      if (val != null) lines.push(`AQI (${scale === "us" ? "US" : "EU"}): ${val}`);
+    }
+    if (config.showPm25 !== false && data.pollutants?.pm2_5 != null) {
+      lines.push(`PM2.5: ${data.pollutants.pm2_5} µg/m³`);
+    }
+    if (config.showPm10 && data.pollutants?.pm10 != null) {
+      lines.push(`PM10: ${data.pollutants.pm10} µg/m³`);
+    }
+    if (config.showOzone && data.pollutants?.ozone != null) {
+      lines.push(`Ozone: ${data.pollutants.ozone} µg/m³`);
+    }
+    if (config.showNo2 && data.pollutants?.nitrogen_dioxide != null) {
+      lines.push(`NO₂: ${data.pollutants.nitrogen_dioxide} µg/m³`);
+    }
+    if (config.showPollen !== false && data.pollen) {
+      const pollenEntries: string[] = [];
+      const names: Record<string, string> = {
+        alder: "Alder", birch: "Birch", grass: "Grass",
+        mugwort: "Mugwort", olive: "Olive", ragweed: "Ragweed",
+      };
+      for (const [key, label] of Object.entries(names)) {
+        const v = data.pollen[key];
+        if (v == null || (config.hidePollenZero && v === 0)) continue;
+        pollenEntries.push(`${label}: ${v}`);
+      }
+      if (pollenEntries.length > 0) lines.push(`Pollen: ${pollenEntries.join(", ")}`);
+    }
+    if (config.showUv && data.uv != null) {
+      lines.push(`UV: ${data.uv}`);
+    }
+    if (config.showWind && data.wind?.speed != null) {
+      lines.push(`Wind: ${Math.round(data.wind.speed)} ${data.wind.unit || "kmh"}`);
+    }
+    if (config.showSolar && data.solar?.shortwave != null) {
+      lines.push(`Solar: ${Math.round(data.solar.shortwave)} W/m²`);
+    }
+
+    if (config.haEntities?.length) {
+      const haSlots = config.haEntities.filter((s: any) => s.entityId);
+      if (haSlots.length > 0) {
+        const haIds = haSlots.map((s: any) => s.entityId).join(",");
+        const haUrl = new URL("/api/ha/state", base);
+        haUrl.searchParams.set("ids", haIds);
+        try {
+          const haRes = await fetch(haUrl.toString(), {
+            cache: "no-store",
+            signal: AbortSignal.timeout(10_000),
+          });
+          if (haRes.ok) {
+            const haData = await haRes.json();
+            for (const slot of haSlots) {
+              const entity = haData[slot.entityId];
+              if (!entity || entity.state === "unavailable" || entity.state === "unknown") continue;
+              const label = slot.label || entity.attributes?.friendly_name || slot.entityId;
+              const unit = slot.unit || entity.attributes?.unit_of_measurement || "";
+              lines.push(`${label}: ${entity.state}${unit ? " " + unit : ""}`);
+            }
+          }
+        } catch {}
+      }
+    }
+
+    return lines;
+  } catch {
+    return ["(environment unavailable)"];
+  }
+}
+
+function textWidgetToText(config: any): string[] {
+  const lines: string[] = [];
+  if (config.text) lines.push(config.text);
+  if (config.subtext) lines.push(config.subtext);
+  return lines;
 }

@@ -67,6 +67,10 @@ const SUPPORTED_TYPES = new Set([
   "CalendarWidget.tsx",
   "TodosWidget.tsx",
   "ShoppingListWidget.tsx",
+  "WeatherWidget.tsx",
+  "SensorWidget.tsx",
+  "EnvironmentWidget.tsx",
+  "TextWidget.tsx",
 ]);
 
 type ViewWidget = { id: string; type: string; label: string; config: any };
@@ -174,6 +178,25 @@ function TextOptionsEditor({
             >
               <option value="unchecked">{t("Nur offene")}</option>
               <option value="all">{t("Alle Einträge")}</option>
+            </select>
+          </label>
+        </div>
+      );
+
+    case "WeatherWidget.tsx":
+      return (
+        <div className="pl-9">
+          <label className="block">
+            <span className="text-xs text-[var(--mf-fg)]/60 block mb-1">{t("Detailgrad")}</span>
+            <select
+              value={options.detail || "oneliner"}
+              onChange={(e) => onChange({ ...options, detail: e.target.value })}
+              className="w-full bg-[var(--mf-surface)] border border-[var(--mf-bdr)]/10 text-[var(--mf-fg)] rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500"
+            >
+              <option value="oneliner">{t("Einzeiler")}</option>
+              <option value="highlow">{t("Hoch/Tief")}</option>
+              <option value="full">{t("Mehrtagesvorhersage")}</option>
+              <option value="hourly">{t("Stündlich (heute)")}</option>
             </select>
           </label>
         </div>

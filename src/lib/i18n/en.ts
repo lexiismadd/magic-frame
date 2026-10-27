@@ -2281,4 +2281,9 @@ export const EN: Record<string, string> = {
   "Nur offene": "Unchecked only",
   "Alle Einträge": "All items",
   "z.B. Morgen-SMS": "e.g. Morning SMS",
+  "Detailgrad": "Detail level",
+  "Einzeiler": "One-liner",
+  "Hoch/Tief": "High/Low only",
+  "Mehrtagesvorhersage": "Multi-day forecast",
+  "Stündlich (heute)": "Hourly (today)",
 };
