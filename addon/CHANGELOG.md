@@ -14,6 +14,13 @@ scripts/check-wiki.mjs prüft, dass die Version aus package.json hier steht.
 
 What each version changes, in short. The full notes are on the [releases page](https://github.com/jeremiaa/magic-frame/releases).
 
+## 1.5.10
+
+- **New: Digests.** Widgets you pick — school rotation, calendar, to-dos, shopping list, weather, sensors — as plain text at an address Home Assistant can read, to send on as a phone notification or an SMS. In the editor under *Digests*, which also shows the Home Assistant configuration to copy. Built by @sth2258.
+- The text says what the tile on the wall says: same sources, same lists, same school holidays — in your installation's language.
+
+[Full notes for 1.5.10](https://github.com/jeremiaa/magic-frame/releases/tag/v1.5.10)
+
 ## 1.5.9
 
 - **New widget: School rotation.** For schools that plan by a cycle of days rather than by weekday: it counts through the school year, shows each child's day and the next school days, and pauses on days without school — taken from a Home Assistant calendar or a list of dates. Weekly reminders on top, like *Friday: bring the gym bag*. Started by @sth2258.
