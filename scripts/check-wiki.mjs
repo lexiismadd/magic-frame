@@ -282,6 +282,50 @@ if (onlyDe.length) errors.push(`README.de.md links ${onlyDe.join(', ')} — READ
 
 notes.push(`the two READMEs share ${enAnchors.length} sections and ${enWiki.size} wiki links`);
 
+// ---- 9: Home Assistant can say what an update brings ------------------------
+//
+// The add-on's update dialog shows addon/CHANGELOG.md — only the part from the
+// version on offer down to the one installed. Without the file it says "No
+// changelog found for app …", which is how 1.5.9 went out. Home Assistant cuts
+// with the pattern rebuilt below (homeassistant/components/hassio/update.py),
+// so a heading with a "v" or a date in it does not count: the user gets the
+// whole file instead.
+//
+// The add-on also has to follow the version, or Home Assistant offers no
+// update at all: config.yaml decides what is offered, build.yaml which image
+// the add-on is built on.
+
+const version = JSON.parse(read('package.json')).version;
+const addonVersion = read('addon/config.yaml').match(/^version:\s*"?([^"\s]+)"?\s*$/m)?.[1];
+if (addonVersion !== version)
+  errors.push(`addon/config.yaml offers ${addonVersion ?? 'no version'}, package.json is ${version} — Home Assistant offers no update`);
+
+const baseImages = [...read('addon/build.yaml').matchAll(/magic-frame-app[\w-]*:(\S+)/g)];
+if (baseImages.length === 0) errors.push('addon/build.yaml names no magic-frame-app image');
+for (const [ref, tag] of baseImages)
+  if (tag !== version) errors.push(`addon/build.yaml builds on ${ref} — should be ${version}`);
+
+if (!existsSync(join(repo, 'addon/CHANGELOG.md'))) {
+  errors.push('addon/CHANGELOG.md is missing — Home Assistant\'s update dialog says "No changelog found"');
+} else {
+  const changelog = read('addon/CHANGELOG.md');
+  const headings = [...changelog.matchAll(/^## (.+)$/gm)].map((m) => m[1]);
+  for (const h of headings)
+    if (!/^\d+\.\d+\.\d+$/.test(h))
+      errors.push(`addon/CHANGELOG.md: "## ${h}" — Home Assistant only cuts at a bare version, like "## ${version}"`);
+
+  if (headings[0] !== version) {
+    errors.push(`addon/CHANGELOG.md does not start with "## ${version}" — say what this version brings before releasing it`);
+  } else {
+    const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const stop = headings[1] ? `(?!#* ${esc(headings[1])})` : '';
+    const cut = changelog.match(new RegExp(`^#* ${esc(version)}\\n(?:^${stop}.*\\n)*`, 'm'))?.[0];
+    const body = cut?.split('\n').slice(1).join('\n').trim();
+    if (!body) errors.push(`addon/CHANGELOG.md: Home Assistant would show nothing for ${version}`);
+    else notes.push(`the add-on offers ${version}, and its update dialog shows ${body.split('\n').filter(Boolean).length} lines`);
+  }
+}
+
 // ---- report ----------------------------------------------------------------
 
 // The same broken link listed in two places is one thing to fix, not two.
