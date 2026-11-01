@@ -740,7 +740,6 @@ export const WIDGET_CONFIG_SCHEMAS: Record<string, z.ZodTypeAny> = {
   "TextWidget.tsx": textConfig,
   "PowerSankeyWidget.tsx": powerSankeyConfig,
   "SchoolRotationWidget.tsx": schoolRotationConfig,
-  "PowerSankeyWidget.tsx": powerSankeyConfig,
   "FlexHorseshoeWidget.tsx": flexHorseshoeConfig,
 };
 
